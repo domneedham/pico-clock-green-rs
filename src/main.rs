@@ -83,18 +83,17 @@ fn main() -> ! {
     }
 
     loop {
-        row = (row + 1) % 8;
-        let led_row = matrix[row];
-
         if button_one.is_low().unwrap() {
             speaker.set_high().unwrap();
         } else {
             speaker.set_low().unwrap();
         }
 
-        for col in 0..=31 {
+        row = (row + 1) % 8;
+
+        for col in &matrix[row] {
             clk.set_low().unwrap();
-            if led_row[col] == 1 {
+            if *col == 1 {
                 sdi.set_high().unwrap();
             } else {
                 sdi.set_low().unwrap();
