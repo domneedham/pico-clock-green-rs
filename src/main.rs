@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+mod display;
 mod scheduler;
 
 use bsp::entry;
@@ -19,6 +20,11 @@ use bsp::hal::{
     pac,
     sio::Sio,
     watchdog::Watchdog,
+};
+
+use crate::{
+    display::{Display, DisplayPins},
+    scheduler::Schedule,
 };
 
 #[entry]
@@ -61,32 +67,16 @@ fn main() -> ! {
     // let button_two = pins.gpio17.into_pull_up_input();
     // let button_three = pins.gpio15.into_pull_up_input();
 
-    let mut a0 = pins.gpio16.into_push_pull_output();
-    let mut a1 = pins.gpio18.into_push_pull_output();
-    let mut a2 = pins.gpio22.into_push_pull_output();
-    let mut oe = pins.gpio13.into_push_pull_output();
-    let mut sdi = pins.gpio11.into_push_pull_output();
-    let mut clk = pins.gpio10.into_push_pull_output();
-    let mut le = pins.gpio12.into_push_pull_output();
+    let a0 = pins.gpio16.into_push_pull_output();
+    let a1 = pins.gpio18.into_push_pull_output();
+    let a2 = pins.gpio22.into_push_pull_output();
+    let oe = pins.gpio13.into_push_pull_output();
+    let sdi = pins.gpio11.into_push_pull_output();
+    let clk = pins.gpio10.into_push_pull_output();
+    let le = pins.gpio12.into_push_pull_output();
 
-    let mut matrix: [[i32; 32]; 8] = [[0; 32]; 8];
-    let mut row = 0;
-
-    for (row_idx, row) in matrix.iter_mut().enumerate() {
-        if row_idx > 0 {
-            if row_idx % 2 == 0 {
-                for (col_idx, element) in row.iter_mut().enumerate() {
-                    if col_idx < 2 || col_idx % 2 == 0 {
-                        *element = 1;
-                    }
-                }
-            }
-        } else {
-            for element in row.iter_mut() {
-                *element = 1;
-            }
-        }
-    }
+    let display_pins = DisplayPins::new(a0, a1, a2, oe, sdi, clk, le);
+    let mut display = Display::new(display_pins);
 
     loop {
         scheduler.invoke_schedules();
@@ -97,42 +87,7 @@ fn main() -> ! {
             speaker.set_low().unwrap();
         }
 
-        row = (row + 1) % 8;
-
-        for col in &matrix[row] {
-            clk.set_low().unwrap();
-            if *col == 1 {
-                sdi.set_high().unwrap();
-            } else {
-                sdi.set_low().unwrap();
-            }
-            clk.set_high().unwrap();
-        }
-
-        le.set_high().unwrap();
-        le.set_low().unwrap();
-
-        if row & 0x01 != 0 {
-            a0.set_high().unwrap();
-        } else {
-            a0.set_low().unwrap();
-        }
-
-        if row & 0x02 != 0 {
-            a1.set_high().unwrap();
-        } else {
-            a1.set_low().unwrap();
-        }
-
-        if row & 0x04 != 0 {
-            a2.set_high().unwrap();
-        } else {
-            a2.set_low().unwrap();
-        }
-
-        oe.set_low().unwrap();
-        delay.delay_us(100);
-        oe.set_high().unwrap();
+        display.update_display();
     }
 }
 
