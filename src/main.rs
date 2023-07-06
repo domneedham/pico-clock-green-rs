@@ -4,23 +4,15 @@
 mod display;
 mod scheduler;
 
-use bsp::{
-    entry,
-    hal::timer::Instant,
-    pac::{
-        dma::{timer0, TIMER0},
-        timer::timehr,
-    },
-};
+use crate::display::{Display, DisplayPins};
+
+use bsp::entry;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use panic_probe as _;
 
-// Provide an alias for our BSP so we can switch targets quickly.
-// Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
 use rp_pico as bsp;
-// use sparkfun_pro_micro_rp2040 as bsp;
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -28,11 +20,6 @@ use bsp::hal::{
     sio::Sio,
     timer,
     watchdog::Watchdog,
-};
-
-use crate::{
-    display::{Display, DisplayPins},
-    scheduler::Schedule,
 };
 
 #[entry]
@@ -67,16 +54,6 @@ fn main() -> ! {
     );
 
     let timer = timer::Timer::new(pac.TIMER, &mut pac.RESETS);
-    let first = timer.get_counter();
-
-    delay.delay_ms(300);
-
-    let second = timer.get_counter();
-
-    let ticks = second.checked_duration_since(first).unwrap().ticks();
-
-    info!("Ticks: {}", ticks);
-
     let mut scheduler = scheduler::Scheduler::new(timer);
     let show_led_schedule = scheduler::Schedule::new(show_led, true, "show_led", 500, 0);
     scheduler.add_schedule(show_led_schedule).unwrap();
@@ -86,6 +63,7 @@ fn main() -> ! {
     // let button_two = pins.gpio17.into_pull_up_input();
     // let button_three = pins.gpio15.into_pull_up_input();
 
+    // init display
     let a0 = pins.gpio16.into_push_pull_output();
     let a1 = pins.gpio18.into_push_pull_output();
     let a2 = pins.gpio22.into_push_pull_output();
@@ -93,7 +71,6 @@ fn main() -> ! {
     let sdi = pins.gpio11.into_push_pull_output();
     let clk = pins.gpio10.into_push_pull_output();
     let le = pins.gpio12.into_push_pull_output();
-
     let display_pins = DisplayPins::new(a0, a1, a2, oe, sdi, clk, le);
     let mut display = Display::new(display_pins);
 
@@ -106,7 +83,7 @@ fn main() -> ! {
             speaker.set_low().unwrap();
         }
 
-        display.update_display();
+        display.update_display(&mut delay);
     }
 }
 

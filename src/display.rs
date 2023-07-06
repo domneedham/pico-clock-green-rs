@@ -1,3 +1,4 @@
+use cortex_m::delay::Delay;
 use embedded_hal::digital::v2::OutputPin;
 use rp_pico::hal::gpio::{bank0::*, Output, Pin, PushPull};
 
@@ -68,7 +69,7 @@ impl<'a> Display {
         dis
     }
 
-    pub fn update_display(&mut self) {
+    pub fn update_display(&mut self, delay: &mut Delay) {
         self.row = (self.row + 1) % 8;
 
         for col in &self.matrix[self.row] {
@@ -103,6 +104,7 @@ impl<'a> Display {
         }
 
         self.pins.oe.set_low().unwrap();
+        delay.delay_us(100);
         self.pins.oe.set_high().unwrap();
     }
 }
