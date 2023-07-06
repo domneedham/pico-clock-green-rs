@@ -1,9 +1,27 @@
+use defmt::info;
+use rp_pico::hal::{timer::Instant, Timer};
+
+#[derive(Clone, Copy)]
 pub struct Schedule<'a> {
     callback: fn(),
     enabled: bool,
     name: &'a str,
-    duration: u32,
-    initial_delay: u32,
+    duration: u64,
+    initial_delay: u64,
+    last_run_ticks: u64,
+}
+
+impl<'a> Default for Schedule<'a> {
+    fn default() -> Self {
+        Self {
+            callback: Self::default_callback,
+            enabled: Default::default(),
+            name: Default::default(),
+            duration: Default::default(),
+            initial_delay: Default::default(),
+            last_run_ticks: Default::default(),
+        }
+    }
 }
 
 impl<'a> Schedule<'a> {
@@ -11,8 +29,8 @@ impl<'a> Schedule<'a> {
         callback: fn(),
         enabled: bool,
         name: &'a str,
-        duration: u32,
-        initial_delay: u32,
+        duration: u64,
+        initial_delay: u64,
     ) -> Schedule<'a> {
         Schedule {
             callback,
@@ -20,12 +38,14 @@ impl<'a> Schedule<'a> {
             name,
             duration,
             initial_delay,
+            last_run_ticks: 0,
         }
     }
 
-    pub fn invoke(&self) {
+    pub fn invoke(&mut self, ticks: u64) {
         if self.enabled {
             (self.callback)();
+            self.last_run_ticks = ticks;
         }
     }
 
@@ -36,24 +56,30 @@ impl<'a> Schedule<'a> {
     pub fn disable(&mut self) {
         self.enabled = false;
     }
+
+    pub fn default_callback() {
+        info!("Non init callback");
+    }
 }
 
 pub struct Scheduler<'a> {
-    schedules: [Option<&'a Schedule<'a>>; 10],
+    schedules: [Schedule<'a>; 10],
     count: usize,
+    timer: Timer,
 }
 
 impl<'a> Scheduler<'a> {
-    pub fn new() -> Scheduler<'a> {
+    pub fn new(timer: Timer) -> Scheduler<'a> {
         Scheduler {
-            schedules: [None; 10],
+            schedules: [Schedule::default(); 10],
             count: 0,
+            timer,
         }
     }
 
-    pub fn add_schedule(&mut self, schedule: &'a Schedule<'a>) -> Result<(), &'static str> {
+    pub fn add_schedule(&mut self, schedule: Schedule<'a>) -> Result<(), &'static str> {
         if self.count < 10 {
-            self.schedules[self.count] = Some(schedule);
+            self.schedules[self.count] = schedule;
             self.count += 1;
             Ok(())
         } else {
@@ -61,27 +87,16 @@ impl<'a> Scheduler<'a> {
         }
     }
 
-    pub fn remove_schedule(&mut self, schedule: &'a Schedule<'a>) {
-        let mut i = 0;
-        while i < self.count {
-            if let Some(existing_callback) = self.schedules[i] {
-                if existing_callback as *const _ == schedule as *const _ {
-                    // Shift remaining elements to the left
-                    for j in i..self.count - 1 {
-                        self.schedules[j] = self.schedules[j + 1];
-                    }
-                    self.count -= 1;
-                    break;
-                }
-            }
-            i += 1;
-        }
-    }
-
-    pub fn invoke_schedules(&self) {
+    pub fn invoke_schedules(&mut self) {
         for i in 0..self.count {
-            if let Some(schedule) = self.schedules[i] {
-                schedule.invoke();
+            let last_run = Instant::from_ticks(self.schedules[i].last_run_ticks);
+
+            let current = self.timer.get_counter();
+
+            let diff_ticks = current.checked_duration_since(last_run).unwrap().ticks() / 1000;
+
+            if diff_ticks > self.schedules[i].duration {
+                self.schedules[i].invoke(current.ticks());
             }
         }
     }

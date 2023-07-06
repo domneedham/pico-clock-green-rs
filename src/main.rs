@@ -3,7 +3,14 @@
 
 mod scheduler;
 
-use bsp::entry;
+use bsp::{
+    entry,
+    hal::timer::Instant,
+    pac::{
+        dma::{timer0, TIMER0},
+        timer::timehr,
+    },
+};
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -18,6 +25,7 @@ use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
     pac,
     sio::Sio,
+    timer,
     watchdog::Watchdog,
 };
 
@@ -52,9 +60,20 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    let mut scheduler = scheduler::Scheduler::new();
-    let show_led_schedule = scheduler::Schedule::new(show_led, true, "show_led", 100, 0);
-    scheduler.add_schedule(&show_led_schedule).unwrap();
+    let timer = timer::Timer::new(pac.TIMER, &mut pac.RESETS);
+    let first = timer.get_counter();
+
+    delay.delay_ms(300);
+
+    let second = timer.get_counter();
+
+    let ticks = second.checked_duration_since(first).unwrap().ticks();
+
+    info!("Ticks: {}", ticks);
+
+    let mut scheduler = scheduler::Scheduler::new(timer);
+    let show_led_schedule = scheduler::Schedule::new(show_led, true, "show_led", 500, 0);
+    scheduler.add_schedule(show_led_schedule).unwrap();
 
     let mut speaker = pins.gpio14.into_push_pull_output();
     let button_one = pins.gpio2.into_pull_up_input();
