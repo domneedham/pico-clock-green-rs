@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+mod scheduler;
+
 use bsp::entry;
 use defmt::*;
 use defmt_rtt as _;
@@ -50,6 +52,10 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
+    let mut scheduler = scheduler::Scheduler::new();
+    let show_led_schedule = scheduler::Schedule::new(show_led, true, "show_led", 100, 0);
+    scheduler.add_schedule(&show_led_schedule).unwrap();
+
     let mut speaker = pins.gpio14.into_push_pull_output();
     let button_one = pins.gpio2.into_pull_up_input();
     // let button_two = pins.gpio17.into_pull_up_input();
@@ -83,6 +89,8 @@ fn main() -> ! {
     }
 
     loop {
+        scheduler.invoke_schedules();
+
         if button_one.is_low().unwrap() {
             speaker.set_high().unwrap();
         } else {
@@ -126,6 +134,10 @@ fn main() -> ! {
         delay.delay_us(100);
         oe.set_high().unwrap();
     }
+}
+
+fn show_led() {
+    info!("Would show led!");
 }
 
 // End of file
