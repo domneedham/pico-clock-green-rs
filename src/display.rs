@@ -1,6 +1,30 @@
+use core::cell::UnsafeCell;
+
 use cortex_m::delay::Delay;
 use embedded_hal::digital::v2::OutputPin;
 use rp_pico::hal::gpio::{bank0::*, Output, Pin, PushPull};
+
+pub struct DisplayMatrix(UnsafeCell<[[i32; 32]; 8]>);
+
+impl DisplayMatrix {
+    pub fn get_matrix(&self) -> &[[i32; 32]; 8] {
+        unsafe { self.0.get().as_ref().unwrap() }
+    }
+
+    pub fn test_leds(&self) {
+        unsafe { *self.0.get() = [[1; 32]; 8] };
+    }
+
+    pub fn clear(&self) {
+        unsafe { *self.0.get() = [[0; 32]; 8] };
+    }
+}
+
+unsafe impl Sync for DisplayMatrix {}
+
+const DISPLAY_MATRIX_INIT: DisplayMatrix = DisplayMatrix(UnsafeCell::new([[1; 32]; 8]));
+
+pub static DISPLAY_MATRIX: DisplayMatrix = DISPLAY_MATRIX_INIT;
 
 pub struct DisplayPins {
     a0: Pin<Gpio16, Output<PushPull>>,
@@ -36,75 +60,52 @@ impl DisplayPins {
 
 pub struct Display {
     pins: DisplayPins,
-    matrix: [[i32; 32]; 8],
     row: usize,
 }
 
 impl<'a> Display {
     pub fn new(pins: DisplayPins) -> Display {
-        let mut matrix = [[0; 32]; 8];
-
-        for (row_idx, row) in matrix.iter_mut().enumerate() {
-            if row_idx > 0 {
-                if row_idx % 2 == 0 {
-                    for (col_idx, element) in row.iter_mut().enumerate() {
-                        if col_idx < 2 || col_idx % 2 == 0 {
-                            *element = 1;
-                        }
-                    }
-                }
-            } else {
-                for element in row.iter_mut() {
-                    *element = 1;
-                }
-            }
-        }
-
-        let dis = Self {
-            pins,
-            matrix,
-            row: 0,
-        };
-
-        dis
+        Self { pins, row: 0 }
     }
 
-    pub fn update_display(&mut self, delay: &mut Delay) {
-        self.row = (self.row + 1) % 8;
+    pub fn update_display(&mut self, mut delay: Delay) -> ! {
+        loop {
+            self.row = (self.row + 1) % 8;
 
-        for col in &self.matrix[self.row] {
-            self.pins.clk.set_low().unwrap();
-            if *col == 1 {
-                self.pins.sdi.set_high().unwrap();
-            } else {
-                self.pins.sdi.set_low().unwrap();
+            for col in DISPLAY_MATRIX.get_matrix()[self.row] {
+                self.pins.clk.set_low().unwrap();
+                if col == 1 {
+                    self.pins.sdi.set_high().unwrap();
+                } else {
+                    self.pins.sdi.set_low().unwrap();
+                }
+                self.pins.clk.set_high().unwrap();
             }
-            self.pins.clk.set_high().unwrap();
+
+            self.pins.le.set_high().unwrap();
+            self.pins.le.set_low().unwrap();
+
+            if self.row & 0x01 != 0 {
+                self.pins.a0.set_high().unwrap();
+            } else {
+                self.pins.a0.set_low().unwrap();
+            }
+
+            if self.row & 0x02 != 0 {
+                self.pins.a1.set_high().unwrap();
+            } else {
+                self.pins.a1.set_low().unwrap();
+            }
+
+            if self.row & 0x04 != 0 {
+                self.pins.a2.set_high().unwrap();
+            } else {
+                self.pins.a2.set_low().unwrap();
+            }
+
+            self.pins.oe.set_low().unwrap();
+            delay.delay_us(100);
+            self.pins.oe.set_high().unwrap();
         }
-
-        self.pins.le.set_high().unwrap();
-        self.pins.le.set_low().unwrap();
-
-        if self.row & 0x01 != 0 {
-            self.pins.a0.set_high().unwrap();
-        } else {
-            self.pins.a0.set_low().unwrap();
-        }
-
-        if self.row & 0x02 != 0 {
-            self.pins.a1.set_high().unwrap();
-        } else {
-            self.pins.a1.set_low().unwrap();
-        }
-
-        if self.row & 0x04 != 0 {
-            self.pins.a2.set_high().unwrap();
-        } else {
-            self.pins.a2.set_low().unwrap();
-        }
-
-        self.pins.oe.set_low().unwrap();
-        delay.delay_us(100);
-        self.pins.oe.set_high().unwrap();
     }
 }

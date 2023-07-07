@@ -4,9 +4,13 @@
 mod display;
 mod scheduler;
 
-use crate::display::{Display, DisplayPins};
+use crate::display::{Display, DisplayPins, DISPLAY_MATRIX};
 
-use bsp::entry;
+use bsp::{
+    entry,
+    hal::multicore::{Multicore, Stack},
+};
+use cortex_m::delay::Delay;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -22,13 +26,24 @@ use bsp::hal::{
     watchdog::Watchdog,
 };
 
+/// Stack for core 1
+///
+/// Core 0 gets its stack via the normal route - any memory not used by static
+/// values is reserved for stack and initialised by cortex-m-rt.
+/// To get the same for Core 1, we would need to compile everything seperately
+/// and modify the linker file for both programs, and that's quite annoying.
+/// So instead, core1.spawn takes a [usize] which gets used for the stack.
+/// NOTE: We use the `Stack` struct here to ensure that it has 32-byte
+/// alignment, which allows the stack guard to take up the least amount of
+/// usable RAM.
+static mut CORE1_STACK: Stack<4096> = Stack::new();
+
 #[entry]
 fn main() -> ! {
     info!("Program start");
     let mut pac = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
-    let sio = Sio::new(pac.SIO);
+    let mut sio = Sio::new(pac.SIO);
 
     // External high-speed crystal on the pico board is 12Mhz
     let external_xtal_freq_hz = 12_000_000u32;
@@ -43,8 +58,6 @@ fn main() -> ! {
     )
     .ok()
     .unwrap();
-
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -74,16 +87,30 @@ fn main() -> ! {
     let display_pins = DisplayPins::new(a0, a1, a2, oe, sdi, clk, le);
     let mut display = Display::new(display_pins);
 
+    // Set up the delay for the first core.
+    let sys_freq = clocks.system_clock.freq().to_Hz();
+
+    let mut mc = Multicore::new(&mut pac.PSM, &mut pac.PPB, &mut sio.fifo);
+    let cores = mc.cores();
+    let core1 = &mut cores[1];
+
+    core1
+        .spawn(unsafe { &mut CORE1_STACK.mem }, move || {
+            let core = unsafe { pac::CorePeripherals::steal() };
+            let delay = Delay::new(core.SYST, sys_freq);
+            display.update_display(delay);
+        })
+        .unwrap();
     loop {
         scheduler.invoke_schedules();
 
         if button_one.is_low().unwrap() {
+            DISPLAY_MATRIX.clear();
             speaker.set_high().unwrap();
         } else {
             speaker.set_low().unwrap();
+            DISPLAY_MATRIX.test_leds();
         }
-
-        display.update_display(&mut delay);
     }
 }
 
