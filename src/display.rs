@@ -1,28 +1,55 @@
-use core::cell::UnsafeCell;
+use core::{cell::UnsafeCell, u8};
 
 use cortex_m::delay::Delay;
 use embedded_hal::digital::v2::OutputPin;
 use rp_pico::hal::gpio::{bank0::*, Output, Pin, PushPull};
 
-pub struct DisplayMatrix(UnsafeCell<[[i32; 32]; 8]>);
+struct DisplaySet<'a> {
+    ziku: [Character<'a>; 1],
+    icons: [Icon<'a>; 1],
+}
 
-impl DisplayMatrix {
-    pub fn get_matrix(&self) -> &[[i32; 32]; 8] {
-        unsafe { self.0.get().as_ref().unwrap() }
+impl<'a> DisplaySet<'a> {
+    const fn new() -> DisplaySet<'a> {
+        Self {
+            ziku: Self::build_ziku(),
+            icons: Self::build_icons(),
+        }
     }
 
-    pub fn test_leds(&self) {
-        unsafe { *self.0.get() = [[1; 32]; 8] };
+    const fn build_ziku() -> [Character<'a>; 1] {
+        [Character::new(
+            ":",
+            &2,
+            &[0x00, 0x03, 0x03, 0x00, 0x03, 0x03, 0x00],
+        )]
     }
 
-    pub fn clear(&self) {
-        unsafe { *self.0.get() = [[0; 32]; 8] };
+    const fn build_icons() -> [Icon<'a>; 1] {
+        [Icon::new("MoveOn", 0, 0, 2)]
     }
 }
 
-unsafe impl Sync for DisplayMatrix {}
+pub struct DisplayMatrix<'a>((UnsafeCell<[[i32; 32]; 8]>, DisplaySet<'a>));
 
-const DISPLAY_MATRIX_INIT: DisplayMatrix = DisplayMatrix(UnsafeCell::new([[1; 32]; 8]));
+impl<'a> DisplayMatrix<'_> {
+    pub fn get_matrix(&self) -> &[[i32; 32]; 8] {
+        unsafe { self.0 .0.get().as_ref().unwrap() }
+    }
+
+    pub fn test_leds(&self) {
+        unsafe { *self.0 .0.get() = [[1; 32]; 8] };
+    }
+
+    pub fn clear(&self) {
+        unsafe { *self.0 .0.get() = [[0; 32]; 8] };
+    }
+}
+
+unsafe impl Sync for DisplayMatrix<'_> {}
+
+const DISPLAY_MATRIX_INIT: DisplayMatrix =
+    DisplayMatrix((UnsafeCell::new([[1; 32]; 8]), DisplaySet::new()));
 
 pub static DISPLAY_MATRIX: DisplayMatrix = DISPLAY_MATRIX_INIT;
 
@@ -107,5 +134,34 @@ impl<'a> Display {
             delay.delay_us(100);
             self.pins.oe.set_high().unwrap();
         }
+    }
+}
+
+struct Character<'a> {
+    name: &'a str,
+    width: &'a u8,
+    values: &'a [u8],
+}
+
+impl<'a> Character<'a> {
+    const fn new(name: &'a str, width: &'a u8, values: &'a [u8]) -> Self {
+        Self {
+            name,
+            width,
+            values,
+        }
+    }
+}
+
+struct Icon<'a> {
+    name: &'a str,
+    x: u8,
+    y: u8,
+    width: u8,
+}
+
+impl<'a> Icon<'a> {
+    const fn new(name: &'a str, x: u8, y: u8, width: u8) -> Icon {
+        Self { name, x, y, width }
     }
 }
