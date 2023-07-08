@@ -13,7 +13,7 @@ use bsp::{
 use cortex_m::delay::Delay;
 use defmt::*;
 use defmt_rtt as _;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::v2::InputPin;
 use panic_probe as _;
 
 use rp_pico as bsp;
@@ -71,10 +71,9 @@ fn main() -> ! {
     let show_led_schedule = scheduler::Schedule::new(show_led, true, "show_led", 500, 0);
     scheduler.add_schedule(show_led_schedule).unwrap();
 
-    let mut speaker = pins.gpio14.into_push_pull_output();
     let button_one = pins.gpio2.into_pull_up_input();
-    // let button_two = pins.gpio17.into_pull_up_input();
-    // let button_three = pins.gpio15.into_pull_up_input();
+    let button_two = pins.gpio17.into_pull_up_input();
+    let button_three = pins.gpio15.into_pull_up_input();
 
     // init display
     let a0 = pins.gpio16.into_push_pull_output();
@@ -108,9 +107,14 @@ fn main() -> ! {
             DISPLAY_MATRIX.test_text();
             DISPLAY_MATRIX.test_icons();
             // speaker.set_high().unwrap();
-        } else {
+        }
+
+        if button_two.is_low().unwrap() {
             DISPLAY_MATRIX.clear();
-            // speaker.set_low().unwrap();
+        }
+
+        if button_three.is_low().unwrap() {
+            DISPLAY_MATRIX.fill();
         }
     }
 }

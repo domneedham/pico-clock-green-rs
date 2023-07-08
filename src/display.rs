@@ -1,4 +1,4 @@
-use core::{cell::UnsafeCell, u8};
+use core::cell::UnsafeCell;
 
 use cortex_m::delay::Delay;
 use embedded_hal::digital::v2::OutputPin;
@@ -32,25 +32,21 @@ impl DisplayMatrix {
     }
 
     fn show_char(&self, character: char, mut pos: usize) {
-        let m: &[[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap() };
-        let mut m2 = m.clone();
+        let mut matrix: [[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap().clone() };
 
         pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
         let c: &Character = get_character_struct(character).unwrap();
 
         for row in 1..8 {
             let byte = c.values[row - 1];
-            let mut new_col = m[row];
             for col in 0..*c.width {
                 let c = pos + col;
-                new_col[c] = (byte >> col) % 2;
+                matrix[row][c] = (byte >> col) % 2;
             }
-
-            m2[row] = new_col;
         }
 
         unsafe {
-            *self.0.get() = m2;
+            *self.0.get() = matrix;
         }
     }
 
@@ -59,16 +55,15 @@ impl DisplayMatrix {
     }
 
     fn show_icon(&self, icon: &'static str) {
-        let m: &[[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap() };
-        let mut m2 = m.clone();
+        let mut matrix: [[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap().clone() };
 
         let i = get_icon_struct(icon).unwrap();
         for w in 0..i.width {
-            m2[i.y][i.x + w] = 1;
+            matrix[i.y][i.x + w] = 1;
         }
 
         unsafe {
-            *self.0.get() = m2;
+            *self.0.get() = matrix;
         }
     }
 }
