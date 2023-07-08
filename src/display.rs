@@ -4,52 +4,49 @@ use cortex_m::delay::Delay;
 use embedded_hal::digital::v2::OutputPin;
 use rp_pico::hal::gpio::{bank0::*, Output, Pin, PushPull};
 
-struct DisplaySet<'a> {
-    ziku: [Character<'a>; 1],
-    icons: [Icon<'a>; 1],
-}
+use self::text::{get_character_struct, Character};
 
-impl<'a> DisplaySet<'a> {
-    const fn new() -> DisplaySet<'a> {
-        Self {
-            ziku: Self::build_ziku(),
-            icons: Self::build_icons(),
-        }
-    }
+pub struct DisplayMatrix(UnsafeCell<[[usize; 32]; 8]>);
 
-    const fn build_ziku() -> [Character<'a>; 1] {
-        [Character::new(
-            ":",
-            &2,
-            &[0x00, 0x03, 0x03, 0x00, 0x03, 0x03, 0x00],
-        )]
-    }
+impl DisplayMatrix {
+    const DISPLAY_OFFSET: usize = 2;
 
-    const fn build_icons() -> [Icon<'a>; 1] {
-        [Icon::new("MoveOn", 0, 0, 2)]
-    }
-}
-
-pub struct DisplayMatrix<'a>((UnsafeCell<[[i32; 32]; 8]>, DisplaySet<'a>));
-
-impl<'a> DisplayMatrix<'_> {
-    pub fn get_matrix(&self) -> &[[i32; 32]; 8] {
-        unsafe { self.0 .0.get().as_ref().unwrap() }
+    pub fn get_matrix(&self) -> &[[usize; 32]; 8] {
+        unsafe { self.0.get().as_ref().unwrap() }
     }
 
     pub fn test_leds(&self) {
-        unsafe { *self.0 .0.get() = [[1; 32]; 8] };
+        self.show_char(':', 3);
     }
 
     pub fn clear(&self) {
-        unsafe { *self.0 .0.get() = [[0; 32]; 8] };
+        unsafe { *self.0.get() = [[0; 32]; 8] };
+    }
+
+    fn show_char(&self, character: char, mut pos: usize) {
+        let m: &[[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap() };
+
+        pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
+        let c: &Character = get_character_struct(character).unwrap();
+
+        for row in 1..8 {
+            let byte = c.values[row - 1];
+            let mut new_col = m[row];
+            for col in 0..*c.width {
+                let c = pos + col;
+                new_col[c] = (byte >> col) % 2;
+            }
+        }
+
+        unsafe {
+            *self.0.get() = *m;
+        }
     }
 }
 
-unsafe impl Sync for DisplayMatrix<'_> {}
+unsafe impl Sync for DisplayMatrix {}
 
-const DISPLAY_MATRIX_INIT: DisplayMatrix =
-    DisplayMatrix((UnsafeCell::new([[1; 32]; 8]), DisplaySet::new()));
+const DISPLAY_MATRIX_INIT: DisplayMatrix = DisplayMatrix(UnsafeCell::new([[1; 32]; 8]));
 
 pub static DISPLAY_MATRIX: DisplayMatrix = DISPLAY_MATRIX_INIT;
 
@@ -137,31 +134,45 @@ impl<'a> Display {
     }
 }
 
-struct Character<'a> {
-    name: &'a str,
-    width: &'a u8,
-    values: &'a [u8],
-}
+mod text {
+    pub struct Character<'a> {
+        pub width: &'a usize,
+        pub values: &'a [usize],
+    }
 
-impl<'a> Character<'a> {
-    const fn new(name: &'a str, width: &'a u8, values: &'a [u8]) -> Self {
-        Self {
-            name,
-            width,
-            values,
+    impl<'a> Character<'a> {
+        const fn new(width: &'a usize, values: &'a [usize]) -> Self {
+            Self { width, values }
         }
     }
-}
 
-struct Icon<'a> {
-    name: &'a str,
-    x: u8,
-    y: u8,
-    width: u8,
-}
+    const CHARACTER_TABLE: [(char, Character); 1] = [(
+        ':',
+        Character::new(&2, &[0x00, 0x03, 0x03, 0x00, 0x03, 0x03, 0x00]),
+    )];
 
-impl<'a> Icon<'a> {
-    const fn new(name: &'a str, x: u8, y: u8, width: u8) -> Icon {
-        Self { name, x, y, width }
+    pub fn get_character_struct(character: char) -> Option<&'static Character<'static>> {
+        for &(c, ref info) in &CHARACTER_TABLE {
+            if c == character {
+                return Some(info);
+            }
+        }
+        None
     }
+}
+
+mod icons {
+    pub struct Icon {
+        pub x: usize,
+        pub y: usize,
+        pub width: usize,
+    }
+
+    impl Icon {
+        const fn new(x: usize, y: usize, width: usize) -> Icon {
+            Self { x, y, width }
+        }
+    }
+
+    pub const ICON_TABLE: [(&'static str, Icon); 1] = [("MoveOn", Icon::new(0, 0, 2))];
 }
