@@ -16,15 +16,21 @@ impl DisplayMatrix {
     }
 
     pub fn test_leds(&self) {
-        self.show_char(':', 3);
+        self.show_char('H', 0);
+        self.show_char('I', 4);
     }
 
     pub fn clear(&self) {
         unsafe { *self.0.get() = [[0; 32]; 8] };
     }
 
+    pub fn fill(&self) {
+        unsafe { *self.0.get() = [[1; 32]; 8] };
+    }
+
     fn show_char(&self, character: char, mut pos: usize) {
         let m: &[[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap() };
+        let mut m2 = m.clone();
 
         pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
         let c: &Character = get_character_struct(character).unwrap();
@@ -36,10 +42,12 @@ impl DisplayMatrix {
                 let c = pos + col;
                 new_col[c] = (byte >> col) % 2;
             }
+
+            m2[row] = new_col;
         }
 
         unsafe {
-            *self.0.get() = *m;
+            *self.0.get() = m2;
         }
     }
 }
@@ -146,10 +154,168 @@ mod text {
         }
     }
 
-    const CHARACTER_TABLE: [(char, Character); 1] = [(
-        ':',
-        Character::new(&2, &[0x00, 0x03, 0x03, 0x00, 0x03, 0x03, 0x00]),
-    )];
+    const CHARACTER_TABLE: [(char, Character); 40] = [
+        (
+            '0',
+            Character::new(&4, &[0x06, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
+        ),
+        (
+            '1',
+            Character::new(&4, &[0x04, 0x06, 0x04, 0x04, 0x04, 0x04, 0x0E]),
+        ),
+        (
+            '2',
+            Character::new(&4, &[0x06, 0x09, 0x08, 0x04, 0x02, 0x01, 0x0F]),
+        ),
+        (
+            '3',
+            Character::new(&4, &[0x06, 0x09, 0x08, 0x06, 0x08, 0x09, 0x06]),
+        ),
+        (
+            '4',
+            Character::new(&4, &[0x08, 0x0C, 0x0A, 0x09, 0x0F, 0x08, 0x08]),
+        ),
+        (
+            '5',
+            Character::new(&4, &[0x0F, 0x01, 0x07, 0x08, 0x08, 0x09, 0x06]),
+        ),
+        (
+            '6',
+            Character::new(&4, &[0x04, 0x02, 0x01, 0x07, 0x09, 0x09, 0x06]),
+        ),
+        (
+            '7',
+            Character::new(&4, &[0x0F, 0x09, 0x04, 0x04, 0x04, 0x04, 0x04]),
+        ),
+        (
+            '8',
+            Character::new(&4, &[0x06, 0x09, 0x09, 0x06, 0x09, 0x09, 0x06]),
+        ),
+        (
+            '9',
+            Character::new(&4, &[0x06, 0x09, 0x09, 0x0E, 0x08, 0x04, 0x02]),
+        ),
+        (
+            'A',
+            Character::new(&4, &[0x06, 0x09, 0x09, 0x0F, 0x09, 0x09, 0x09]),
+        ),
+        (
+            'B',
+            Character::new(&4, &[0x07, 0x09, 0x09, 0x07, 0x09, 0x09, 0x07]),
+        ),
+        (
+            'C',
+            Character::new(&4, &[0x06, 0x09, 0x01, 0x01, 0x01, 0x09, 0x06]),
+        ),
+        (
+            'D',
+            Character::new(&4, &[0x07, 0x09, 0x09, 0x09, 0x09, 0x09, 0x07]),
+        ),
+        (
+            'E',
+            Character::new(&4, &[0x0F, 0x01, 0x01, 0x0F, 0x01, 0x01, 0x0F]),
+        ),
+        (
+            'F',
+            Character::new(&4, &[0x0F, 0x01, 0x01, 0x0F, 0x01, 0x01, 0x01]),
+        ),
+        (
+            'G',
+            Character::new(&4, &[0x06, 0x09, 0x01, 0x0D, 0x09, 0x09, 0x06]),
+        ),
+        (
+            'H',
+            Character::new(&4, &[0x09, 0x09, 0x09, 0x0F, 0x09, 0x09, 0x09]),
+        ),
+        (
+            'I',
+            Character::new(&3, &[0x07, 0x02, 0x02, 0x02, 0x02, 0x02, 0x07]),
+        ),
+        (
+            'J',
+            Character::new(&4, &[0x0F, 0x08, 0x08, 0x08, 0x09, 0x09, 0x06]),
+        ),
+        (
+            'K',
+            Character::new(&4, &[0x09, 0x05, 0x03, 0x01, 0x03, 0x05, 0x09]),
+        ),
+        (
+            'L',
+            Character::new(&4, &[0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x0F]),
+        ),
+        (
+            'M',
+            Character::new(&5, &[0x11, 0x1B, 0x15, 0x11, 0x11, 0x11, 0x11]),
+        ),
+        (
+            'N',
+            Character::new(&4, &[0x09, 0x09, 0x0B, 0x0D, 0x09, 0x09, 0x09]),
+        ),
+        (
+            'O',
+            Character::new(&4, &[0x06, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
+        ),
+        (
+            'P',
+            Character::new(&4, &[0x07, 0x09, 0x09, 0x07, 0x01, 0x01, 0x01]),
+        ),
+        (
+            'Q',
+            Character::new(&5, &[0x0E, 0x11, 0x11, 0x11, 0x15, 0x19, 0x0E]),
+        ),
+        (
+            'R',
+            Character::new(&4, &[0x07, 0x09, 0x09, 0x07, 0x03, 0x05, 0x09]),
+        ),
+        (
+            'S',
+            Character::new(&4, &[0x06, 0x09, 0x02, 0x04, 0x08, 0x09, 0x06]),
+        ),
+        (
+            'T',
+            Character::new(&5, &[0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04]),
+        ),
+        (
+            'U',
+            Character::new(&4, &[0x09, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
+        ),
+        (
+            'X',
+            Character::new(&5, &[0x11, 0x0A, 0x04, 0x04, 0x04, 0x0A, 0x11]),
+        ),
+        (
+            'Y',
+            Character::new(&4, &[0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04]),
+        ),
+        (
+            'Z',
+            Character::new(&4, &[0x0F, 0x08, 0x04, 0x02, 0x01, 0x0F, 0x00]),
+        ),
+        (
+            ':',
+            Character::new(&2, &[0x00, 0x03, 0x03, 0x00, 0x03, 0x03, 0x00]),
+        ),
+        (
+            ' ',
+            Character::new(&2, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+        ),
+        (
+            '°',
+            Character::new(&2, &[0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00]),
+        ),
+        (
+            '.',
+            Character::new(&1, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+        ),
+        (
+            '-',
+            Character::new(&2, &[0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00]),
+        ),
+        (
+            '/',
+            Character::new(&2, &[0x02, 0x02, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01]),
+        ),
+    ];
 
     pub fn get_character_struct(character: char) -> Option<&'static Character<'static>> {
         for &(c, ref info) in &CHARACTER_TABLE {
