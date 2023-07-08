@@ -6,7 +6,7 @@ use embedded_hal::digital::v2::OutputPin;
 use rp_pico::hal::gpio::{bank0::*, Output, Pin, PushPull};
 
 use self::{
-    icons::get_icon_struct,
+    icons::{get_icon_struct, Icon},
     text::{get_character_struct, Character},
 };
 
@@ -28,7 +28,7 @@ impl DisplayMatrix {
     }
 
     pub fn test_text(&self) {
-        self.show_text("h_i", false);
+        self.show_text("hi", false);
     }
 
     pub fn show_text(&self, text: &str, clear: bool) {
@@ -75,7 +75,7 @@ impl DisplayMatrix {
     pub fn show_icon(&self, icon_text: &'static str) {
         let mut matrix: [[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap().clone() };
 
-        let icon: Option<&icons::Icon> = get_icon_struct(icon_text);
+        let icon: Option<&Icon> = get_icon_struct(icon_text);
         match icon {
             Some(i) => {
                 for w in 0..i.width {
