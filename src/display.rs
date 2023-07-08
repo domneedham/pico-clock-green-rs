@@ -4,7 +4,10 @@ use cortex_m::delay::Delay;
 use embedded_hal::digital::v2::OutputPin;
 use rp_pico::hal::gpio::{bank0::*, Output, Pin, PushPull};
 
-use self::text::{get_character_struct, Character};
+use self::{
+    icons::get_icon_struct,
+    text::{get_character_struct, Character},
+};
 
 pub struct DisplayMatrix(UnsafeCell<[[usize; 32]; 8]>);
 
@@ -15,7 +18,7 @@ impl DisplayMatrix {
         unsafe { self.0.get().as_ref().unwrap() }
     }
 
-    pub fn test_leds(&self) {
+    pub fn test_text(&self) {
         self.show_char('H', 0);
         self.show_char('I', 4);
     }
@@ -44,6 +47,24 @@ impl DisplayMatrix {
             }
 
             m2[row] = new_col;
+        }
+
+        unsafe {
+            *self.0.get() = m2;
+        }
+    }
+
+    pub fn test_icons(&self) {
+        self.show_icon("Sat")
+    }
+
+    fn show_icon(&self, icon: &'static str) {
+        let m: &[[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap() };
+        let mut m2 = m.clone();
+
+        let i = get_icon_struct(icon).unwrap();
+        for w in 0..i.width {
+            m2[i.y][i.x + w] = 1;
         }
 
         unsafe {
@@ -340,5 +361,32 @@ mod icons {
         }
     }
 
-    pub const ICON_TABLE: [(&'static str, Icon); 1] = [("MoveOn", Icon::new(0, 0, 2))];
+    pub const ICON_TABLE: [(&'static str, Icon); 17] = [
+        ("MoveOn", Icon::new(0, 0, 2)),
+        ("AlarmOn", Icon::new(0, 1, 2)),
+        ("CountDown", Icon::new(0, 2, 2)),
+        ("°F", Icon::new(0, 3, 1)),
+        ("°C", Icon::new(1, 3, 1)),
+        ("AM", Icon::new(0, 4, 1)),
+        ("PM", Icon::new(1, 4, 1)),
+        ("CountUp", Icon::new(0, 5, 2)),
+        ("Hourly", Icon::new(0, 6, 2)),
+        ("AutoLight", Icon::new(0, 7, 2)),
+        ("Mon", Icon::new(3, 0, 2)),
+        ("Tue", Icon::new(6, 0, 2)),
+        ("Wed", Icon::new(9, 0, 2)),
+        ("Thur", Icon::new(12, 0, 2)),
+        ("Fri", Icon::new(15, 0, 2)),
+        ("Sat", Icon::new(18, 0, 2)),
+        ("Sun", Icon::new(21, 0, 2)),
+    ];
+
+    pub fn get_icon_struct(icon: &'static str) -> Option<&Icon> {
+        for &(c, ref info) in &ICON_TABLE {
+            if c == icon {
+                return Some(info);
+            }
+        }
+        None
+    }
 }

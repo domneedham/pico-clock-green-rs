@@ -105,10 +105,11 @@ fn main() -> ! {
         // scheduler.invoke_schedules();
 
         if button_one.is_low().unwrap() {
-            DISPLAY_MATRIX.test_leds();
+            DISPLAY_MATRIX.test_text();
+            DISPLAY_MATRIX.test_icons();
             // speaker.set_high().unwrap();
         } else {
-            DISPLAY_MATRIX.fill();
+            DISPLAY_MATRIX.clear();
             // speaker.set_low().unwrap();
         }
     }
