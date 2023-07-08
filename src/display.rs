@@ -1,6 +1,7 @@
 use core::cell::UnsafeCell;
 
 use cortex_m::delay::Delay;
+use defmt::info;
 use embedded_hal::digital::v2::OutputPin;
 use rp_pico::hal::gpio::{bank0::*, Output, Pin, PushPull};
 
@@ -18,11 +19,6 @@ impl DisplayMatrix {
         unsafe { self.0.get().as_ref().unwrap() }
     }
 
-    pub fn test_text(&self) {
-        self.show_char('H', 0);
-        self.show_char('I', 4);
-    }
-
     pub fn clear(&self) {
         unsafe { *self.0.get() = [[0; 32]; 8] };
     }
@@ -31,15 +27,36 @@ impl DisplayMatrix {
         unsafe { *self.0.get() = [[1; 32]; 8] };
     }
 
-    fn show_char(&self, character: char, mut pos: usize) {
+    pub fn test_text(&self) {
+        self.show_text("h_i", false);
+    }
+
+    pub fn show_text(&self, text: &str, clear: bool) {
+        if clear {
+            self.clear();
+        }
+
+        let mut pos = 0;
+        for c in text.chars() {
+            let character: Option<&Character> = get_character_struct(c);
+            match character {
+                Some(ch) => {
+                    self.show_char(ch, pos);
+                    pos += ch.width + 1; // add column space between characters
+                }
+                None => info!("Letter {} not found", c),
+            }
+        }
+    }
+
+    fn show_char(&self, character: &Character, mut pos: usize) {
         let mut matrix: [[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap().clone() };
 
         pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
-        let c: &Character = get_character_struct(character).unwrap();
 
         for row in 1..8 {
-            let byte = c.values[row - 1];
-            for col in 0..*c.width {
+            let byte = character.values[row - 1];
+            for col in 0..*character.width {
                 let c = pos + col;
                 matrix[row][c] = (byte >> col) % 2;
             }
@@ -51,15 +68,21 @@ impl DisplayMatrix {
     }
 
     pub fn test_icons(&self) {
+        self.show_icon("AutoLight");
         self.show_icon("Sat")
     }
 
-    fn show_icon(&self, icon: &'static str) {
+    pub fn show_icon(&self, icon_text: &'static str) {
         let mut matrix: [[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap().clone() };
 
-        let i = get_icon_struct(icon).unwrap();
-        for w in 0..i.width {
-            matrix[i.y][i.x + w] = 1;
+        let icon: Option<&icons::Icon> = get_icon_struct(icon_text);
+        match icon {
+            Some(i) => {
+                for w in 0..i.width {
+                    matrix[i.y][i.x + w] = 1;
+                }
+            }
+            None => info!("Icon {} not found", icon_text),
         }
 
         unsafe {
@@ -335,7 +358,7 @@ mod text {
 
     pub fn get_character_struct(character: char) -> Option<&'static Character<'static>> {
         for &(c, ref info) in &CHARACTER_TABLE {
-            if c == character {
+            if c == character.to_ascii_uppercase() {
                 return Some(info);
             }
         }
