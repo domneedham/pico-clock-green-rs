@@ -1,6 +1,7 @@
-use core::cell::UnsafeCell;
+use core::cell::RefCell;
 
 use cortex_m::delay::Delay;
+use critical_section::{CriticalSection, Mutex};
 use defmt::info;
 use embedded_hal::digital::v2::OutputPin;
 use rp_pico::hal::gpio::{bank0::*, Output, Pin, PushPull};
@@ -10,30 +11,26 @@ use self::{
     text::{get_character_struct, Character},
 };
 
-pub struct DisplayMatrix(UnsafeCell<[[usize; 32]; 8]>);
+pub struct DisplayMatrix(Mutex<RefCell<[[usize; 32]; 8]>>);
 
 impl DisplayMatrix {
     const DISPLAY_OFFSET: usize = 2;
 
-    pub fn get_matrix(&self) -> &[[usize; 32]; 8] {
-        unsafe { self.0.get().as_ref().unwrap() }
+    pub fn clear(&self, cs: CriticalSection) {
+        self.0.replace(cs, [[0; 32]; 8]);
     }
 
-    pub fn clear(&self) {
-        unsafe { *self.0.get() = [[0; 32]; 8] };
+    pub fn fill(&self, cs: CriticalSection) {
+        self.0.replace(cs, [[1; 32]; 8]);
     }
 
-    pub fn fill(&self) {
-        unsafe { *self.0.get() = [[1; 32]; 8] };
+    pub fn test_text(&self, cs: CriticalSection) {
+        self.show_text(cs, "hi", false);
     }
 
-    pub fn test_text(&self) {
-        self.show_text("hi", false);
-    }
-
-    pub fn show_text(&self, text: &str, clear: bool) {
+    pub fn show_text(&self, cs: CriticalSection, text: &str, clear: bool) {
         if clear {
-            self.clear();
+            self.clear(cs);
         }
 
         let mut pos = 0;
@@ -41,7 +38,7 @@ impl DisplayMatrix {
             let character: Option<&Character> = get_character_struct(c);
             match character {
                 Some(ch) => {
-                    self.show_char(ch, pos);
+                    self.show_char(cs, ch, pos);
                     pos += ch.width + 1; // add column space between characters
                 }
                 None => info!("Letter {} not found", c),
@@ -49,8 +46,8 @@ impl DisplayMatrix {
         }
     }
 
-    fn show_char(&self, character: &Character, mut pos: usize) {
-        let mut matrix: [[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap().clone() };
+    fn show_char(&self, cs: CriticalSection, character: &Character, mut pos: usize) {
+        let mut matrix = self.0.borrow_ref_mut(cs);
 
         pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
 
@@ -61,19 +58,15 @@ impl DisplayMatrix {
                 matrix[row][c] = (byte >> col) % 2;
             }
         }
-
-        unsafe {
-            *self.0.get() = matrix;
-        }
     }
 
-    pub fn test_icons(&self) {
-        self.show_icon("AutoLight");
-        self.show_icon("Sat")
+    pub fn test_icons(&self, cs: CriticalSection) {
+        self.show_icon(cs, "AutoLight");
+        self.show_icon(cs, "Sat")
     }
 
-    pub fn show_icon(&self, icon_text: &'static str) {
-        let mut matrix: [[usize; 32]; 8] = unsafe { self.0.get().as_ref().unwrap().clone() };
+    pub fn show_icon(&self, cs: CriticalSection, icon_text: &'static str) {
+        let mut matrix = self.0.borrow_ref_mut(cs);
 
         let icon: Option<&Icon> = get_icon_struct(icon_text);
         match icon {
@@ -84,16 +77,10 @@ impl DisplayMatrix {
             }
             None => info!("Icon {} not found", icon_text),
         }
-
-        unsafe {
-            *self.0.get() = matrix;
-        }
     }
 }
 
-unsafe impl Sync for DisplayMatrix {}
-
-const DISPLAY_MATRIX_INIT: DisplayMatrix = DisplayMatrix(UnsafeCell::new([[1; 32]; 8]));
+const DISPLAY_MATRIX_INIT: DisplayMatrix = DisplayMatrix(Mutex::new(RefCell::new([[1; 32]; 8])));
 
 pub static DISPLAY_MATRIX: DisplayMatrix = DISPLAY_MATRIX_INIT;
 
@@ -143,15 +130,17 @@ impl<'a> Display {
         loop {
             self.row = (self.row + 1) % 8;
 
-            for col in DISPLAY_MATRIX.get_matrix()[self.row] {
-                self.pins.clk.set_low().unwrap();
-                if col == 1 {
-                    self.pins.sdi.set_high().unwrap();
-                } else {
-                    self.pins.sdi.set_low().unwrap();
+            critical_section::with(|cs| {
+                for col in DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
+                    self.pins.clk.set_low().unwrap();
+                    if col == 1 {
+                        self.pins.sdi.set_high().unwrap();
+                    } else {
+                        self.pins.sdi.set_low().unwrap();
+                    }
+                    self.pins.clk.set_high().unwrap();
                 }
-                self.pins.clk.set_high().unwrap();
-            }
+            });
 
             self.pins.le.set_high().unwrap();
             self.pins.le.set_low().unwrap();

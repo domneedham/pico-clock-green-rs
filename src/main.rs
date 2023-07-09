@@ -103,19 +103,21 @@ fn main() -> ! {
     loop {
         // scheduler.invoke_schedules();
 
-        if button_one.is_low().unwrap() {
-            DISPLAY_MATRIX.test_text();
-            DISPLAY_MATRIX.test_icons();
-            // speaker.set_high().unwrap();
-        }
+        critical_section::with(|cs| {
+            if button_one.is_low().unwrap() {
+                DISPLAY_MATRIX.test_text(cs);
+                DISPLAY_MATRIX.test_icons(cs);
+                // speaker.set_high().unwrap();
+            }
 
-        if button_two.is_low().unwrap() {
-            DISPLAY_MATRIX.clear();
-        }
+            if button_two.is_low().unwrap() {
+                DISPLAY_MATRIX.clear(cs);
+            }
 
-        if button_three.is_low().unwrap() {
-            DISPLAY_MATRIX.fill();
-        }
+            if button_three.is_low().unwrap() {
+                DISPLAY_MATRIX.fill(cs);
+            }
+        })
     }
 }
 
