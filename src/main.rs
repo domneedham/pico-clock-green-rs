@@ -1,128 +1,69 @@
 #![no_std]
 #![no_main]
+#![feature(type_alias_impl_trait)]
 
 mod display;
-mod scheduler;
 
 use crate::display::{Display, DisplayPins, DISPLAY_MATRIX};
 
-use bsp::{
-    entry,
-    hal::multicore::{Multicore, Stack},
+use embassy_executor::{Executor, _export::StaticCell};
+use embassy_rp::{
+    gpio::{Input, Level, Output, Pull},
+    multicore::Stack,
 };
-use cortex_m::delay::Delay;
-use defmt::*;
-use defmt_rtt as _;
-use embedded_hal::digital::v2::InputPin;
-use panic_probe as _;
+use {defmt as _, defmt_rtt as _, panic_probe as _};
 
-use rp_pico as bsp;
-
-use bsp::hal::{
-    clocks::{init_clocks_and_plls, Clock},
-    pac,
-    sio::Sio,
-    timer,
-    watchdog::Watchdog,
-};
-
-/// Stack for core 1
-///
-/// Core 0 gets its stack via the normal route - any memory not used by static
-/// values is reserved for stack and initialised by cortex-m-rt.
-/// To get the same for Core 1, we would need to compile everything seperately
-/// and modify the linker file for both programs, and that's quite annoying.
-/// So instead, core1.spawn takes a [usize] which gets used for the stack.
-/// NOTE: We use the `Stack` struct here to ensure that it has 32-byte
-/// alignment, which allows the stack guard to take up the least amount of
-/// usable RAM.
+static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
+static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 static mut CORE1_STACK: Stack<4096> = Stack::new();
 
-#[entry]
+#[cortex_m_rt::entry]
 fn main() -> ! {
-    info!("Program start");
-    let mut pac = pac::Peripherals::take().unwrap();
-    let mut watchdog = Watchdog::new(pac.WATCHDOG);
-    let mut sio = Sio::new(pac.SIO);
+    // Initialise Peripherals
+    let p = embassy_rp::init(Default::default());
 
-    // External high-speed crystal on the pico board is 12Mhz
-    let external_xtal_freq_hz = 12_000_000u32;
-    let clocks = init_clocks_and_plls(
-        external_xtal_freq_hz,
-        pac.XOSC,
-        pac.CLOCKS,
-        pac.PLL_SYS,
-        pac.PLL_USB,
-        &mut pac.RESETS,
-        &mut watchdog,
-    )
-    .ok()
-    .unwrap();
-
-    let pins = bsp::Pins::new(
-        pac.IO_BANK0,
-        pac.PADS_BANK0,
-        sio.gpio_bank0,
-        &mut pac.RESETS,
-    );
-
-    let timer = timer::Timer::new(pac.TIMER, &mut pac.RESETS);
-    let mut scheduler = scheduler::Scheduler::new(timer);
-    let show_led_schedule = scheduler::Schedule::new(show_led, true, "show_led", 500, 0);
-    scheduler.add_schedule(show_led_schedule).unwrap();
-
-    let button_one = pins.gpio2.into_pull_up_input();
-    let button_two = pins.gpio17.into_pull_up_input();
-    let button_three = pins.gpio15.into_pull_up_input();
+    let button_one = Input::new(p.PIN_2, Pull::Up);
+    let button_two = Input::new(p.PIN_17, Pull::Up);
+    let button_three = Input::new(p.PIN_15, Pull::Up);
 
     // init display
-    let a0 = pins.gpio16.into_push_pull_output();
-    let a1 = pins.gpio18.into_push_pull_output();
-    let a2 = pins.gpio22.into_push_pull_output();
-    let oe = pins.gpio13.into_push_pull_output();
-    let sdi = pins.gpio11.into_push_pull_output();
-    let clk = pins.gpio10.into_push_pull_output();
-    let le = pins.gpio12.into_push_pull_output();
+    let a0: Output<'_, embassy_rp::peripherals::PIN_16> = Output::new(p.PIN_16, Level::Low);
+    let a1 = Output::new(p.PIN_18, Level::Low);
+    let a2 = Output::new(p.PIN_22, Level::Low);
+    let oe = Output::new(p.PIN_13, Level::Low);
+    let sdi = Output::new(p.PIN_11, Level::Low);
+    let clk = Output::new(p.PIN_10, Level::Low);
+    let le = Output::new(p.PIN_12, Level::Low);
     let display_pins = DisplayPins::new(a0, a1, a2, oe, sdi, clk, le);
-    let mut display = Display::new(display_pins);
+    let display = Display::new(display_pins);
 
-    // Set up the delay for the first core.
-    let sys_freq = clocks.system_clock.freq().to_Hz();
+    embassy_rp::multicore::spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
+        let executor1 = EXECUTOR1.init(Executor::new());
+        executor1.run(|spawner| spawner.spawn(display_core(display)).unwrap());
+    });
 
-    let mut mc = Multicore::new(&mut pac.PSM, &mut pac.PPB, &mut sio.fifo);
-    let cores = mc.cores();
-    let core1 = &mut cores[1];
-
-    core1
-        .spawn(unsafe { &mut CORE1_STACK.mem }, move || {
-            let core = unsafe { pac::CorePeripherals::steal() };
-            let delay = Delay::new(core.SYST, sys_freq);
-            display.update_display(delay);
-        })
-        .unwrap();
     loop {
         // scheduler.invoke_schedules();
 
         critical_section::with(|cs| {
-            if button_one.is_low().unwrap() {
+            if button_one.is_low() {
                 DISPLAY_MATRIX.test_text(cs);
                 DISPLAY_MATRIX.test_icons(cs);
                 // speaker.set_high().unwrap();
             }
 
-            if button_two.is_low().unwrap() {
+            if button_two.is_low() {
                 DISPLAY_MATRIX.clear(cs);
             }
 
-            if button_three.is_low().unwrap() {
+            if button_three.is_low() {
                 DISPLAY_MATRIX.fill(cs);
             }
         })
     }
 }
 
-fn show_led() {
-    info!("Would show led!");
+#[embassy_executor::task]
+async fn display_core(mut display: Display<'static>) {
+    display.update_display().await;
 }
-
-// End of file

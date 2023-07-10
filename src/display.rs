@@ -1,10 +1,9 @@
 use core::cell::RefCell;
 
-use cortex_m::delay::Delay;
 use critical_section::{CriticalSection, Mutex};
 use defmt::info;
-use embedded_hal::digital::v2::OutputPin;
-use rp_pico::hal::gpio::{bank0::*, Output, Pin, PushPull};
+use embassy_rp::gpio::Output;
+use embassy_time::{Duration, Timer};
 
 use self::{
     icons::{get_icon_struct, Icon},
@@ -84,25 +83,25 @@ const DISPLAY_MATRIX_INIT: DisplayMatrix = DisplayMatrix(Mutex::new(RefCell::new
 
 pub static DISPLAY_MATRIX: DisplayMatrix = DISPLAY_MATRIX_INIT;
 
-pub struct DisplayPins {
-    a0: Pin<Gpio16, Output<PushPull>>,
-    a1: Pin<Gpio18, Output<PushPull>>,
-    a2: Pin<Gpio22, Output<PushPull>>,
-    oe: Pin<Gpio13, Output<PushPull>>,
-    sdi: Pin<Gpio11, Output<PushPull>>,
-    clk: Pin<Gpio10, Output<PushPull>>,
-    le: Pin<Gpio12, Output<PushPull>>,
+pub struct DisplayPins<'a> {
+    a0: Output<'a, embassy_rp::peripherals::PIN_16>,
+    a1: Output<'a, embassy_rp::peripherals::PIN_18>,
+    a2: Output<'a, embassy_rp::peripherals::PIN_22>,
+    oe: Output<'a, embassy_rp::peripherals::PIN_13>,
+    sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
+    clk: Output<'a, embassy_rp::peripherals::PIN_10>,
+    le: Output<'a, embassy_rp::peripherals::PIN_12>,
 }
 
-impl DisplayPins {
+impl<'a> DisplayPins<'a> {
     pub fn new(
-        a0: Pin<Gpio16, Output<PushPull>>,
-        a1: Pin<Gpio18, Output<PushPull>>,
-        a2: Pin<Gpio22, Output<PushPull>>,
-        oe: Pin<Gpio13, Output<PushPull>>,
-        sdi: Pin<Gpio11, Output<PushPull>>,
-        clk: Pin<Gpio10, Output<PushPull>>,
-        le: Pin<Gpio12, Output<PushPull>>,
+        a0: Output<'a, embassy_rp::peripherals::PIN_16>,
+        a1: Output<'a, embassy_rp::peripherals::PIN_18>,
+        a2: Output<'a, embassy_rp::peripherals::PIN_22>,
+        oe: Output<'a, embassy_rp::peripherals::PIN_13>,
+        sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
+        clk: Output<'a, embassy_rp::peripherals::PIN_10>,
+        le: Output<'a, embassy_rp::peripherals::PIN_12>,
     ) -> Self {
         Self {
             a0,
@@ -116,56 +115,56 @@ impl DisplayPins {
     }
 }
 
-pub struct Display {
-    pins: DisplayPins,
+pub struct Display<'a> {
+    pins: DisplayPins<'a>,
     row: usize,
 }
 
-impl<'a> Display {
-    pub fn new(pins: DisplayPins) -> Display {
+impl<'a> Display<'a> {
+    pub fn new(pins: DisplayPins<'a>) -> Display {
         Self { pins, row: 0 }
     }
 
-    pub fn update_display(&mut self, mut delay: Delay) -> ! {
+    pub async fn update_display(&mut self) -> ! {
         loop {
             self.row = (self.row + 1) % 8;
 
             critical_section::with(|cs| {
                 for col in DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
-                    self.pins.clk.set_low().unwrap();
+                    self.pins.clk.set_low();
                     if col == 1 {
-                        self.pins.sdi.set_high().unwrap();
+                        self.pins.sdi.set_high();
                     } else {
-                        self.pins.sdi.set_low().unwrap();
+                        self.pins.sdi.set_low();
                     }
-                    self.pins.clk.set_high().unwrap();
+                    self.pins.clk.set_high();
                 }
             });
 
-            self.pins.le.set_high().unwrap();
-            self.pins.le.set_low().unwrap();
+            self.pins.le.set_high();
+            self.pins.le.set_low();
 
             if self.row & 0x01 != 0 {
-                self.pins.a0.set_high().unwrap();
+                self.pins.a0.set_high();
             } else {
-                self.pins.a0.set_low().unwrap();
+                self.pins.a0.set_low();
             }
 
             if self.row & 0x02 != 0 {
-                self.pins.a1.set_high().unwrap();
+                self.pins.a1.set_high();
             } else {
-                self.pins.a1.set_low().unwrap();
+                self.pins.a1.set_low();
             }
 
             if self.row & 0x04 != 0 {
-                self.pins.a2.set_high().unwrap();
+                self.pins.a2.set_high();
             } else {
-                self.pins.a2.set_low().unwrap();
+                self.pins.a2.set_low();
             }
 
-            self.pins.oe.set_low().unwrap();
-            delay.delay_us(100);
-            self.pins.oe.set_high().unwrap();
+            self.pins.oe.set_low();
+            Timer::after(Duration::from_micros(100)).await;
+            self.pins.oe.set_high();
         }
     }
 }
