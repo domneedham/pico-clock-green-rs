@@ -4,14 +4,17 @@
 
 mod display;
 
-use crate::display::{Display, DisplayPins, DISPLAY_MATRIX};
+use crate::display::{Display, DisplayPins};
 
-use embassy_executor::{Executor, _export::StaticCell};
+use defmt::info;
+use display::DISPLAY_MATRIX;
+use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
     gpio::{Input, Level, Output, Pull},
     multicore::Stack,
     peripherals::*,
 };
+use embassy_time::{Duration, Timer};
 use {defmt as _, defmt_rtt as _, panic_probe as _};
 
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
@@ -22,6 +25,7 @@ static mut CORE1_STACK: Stack<4096> = Stack::new();
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
 
+    // init buttons
     let button_one: Input<'_, PIN_2> = Input::new(p.PIN_2, Pull::Up);
     let button_two: Input<'_, PIN_17> = Input::new(p.PIN_17, Pull::Up);
     let button_three: Input<'_, PIN_15> = Input::new(p.PIN_15, Pull::Up);
@@ -45,37 +49,55 @@ fn main() -> ! {
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {
         spawner
-            .spawn(main_core(button_one, button_two, button_three))
-            .unwrap()
+            .spawn(main_core(spawner, button_one, button_two, button_three))
+            .unwrap();
     });
 }
 
 #[embassy_executor::task]
 async fn main_core(
+    spawner: Spawner,
     button_one: Input<'static, PIN_2>,
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
-) {
+) -> ! {
+    spawner.spawn(logger_fn()).unwrap();
+
     loop {
-        critical_section::with(|cs| {
-            if button_one.is_low() {
+        if button_one.is_low() {
+            critical_section::with(|cs| {
                 DISPLAY_MATRIX.test_text(cs);
                 DISPLAY_MATRIX.test_icons(cs);
-                // speaker.set_high().unwrap();
-            }
+            });
+        }
 
-            if button_two.is_low() {
+        if button_two.is_low() {
+            critical_section::with(|cs| {
                 DISPLAY_MATRIX.clear(cs);
-            }
+            });
+        }
 
-            if button_three.is_low() {
+        if button_three.is_low() {
+            critical_section::with(|cs| {
                 DISPLAY_MATRIX.fill(cs);
-            }
-        })
+            });
+        }
+
+        Timer::after(Duration::from_millis(100)).await;
     }
 }
 
 #[embassy_executor::task]
-async fn display_core(mut display: Display<'static>) {
-    display.update_display().await;
+async fn display_core(mut display: Display<'static>) -> ! {
+    loop {
+        display.update_display().await;
+    }
+}
+
+#[embassy_executor::task]
+async fn logger_fn() {
+    loop {
+        info!("Still alive!");
+        Timer::after(Duration::from_secs(5)).await;
+    }
 }
