@@ -1,87 +1,15 @@
 use core::cell::RefCell;
-
 use critical_section::{CriticalSection, Mutex};
 use defmt::info;
 use embassy_rp::gpio::Output;
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use embassy_time::{Duration, Timer};
+use heapless::Vec;
 
 use self::{
     icons::{get_icon_struct, Icon},
     text::{get_character_struct, Character},
 };
-
-pub struct DisplayMatrix(Mutex<RefCell<[[usize; 32]; 8]>>);
-
-impl DisplayMatrix {
-    const DISPLAY_OFFSET: usize = 2;
-
-    pub fn clear(&self, cs: CriticalSection) {
-        self.0.replace(cs, [[0; 32]; 8]);
-    }
-
-    pub fn fill(&self, cs: CriticalSection) {
-        self.0.replace(cs, [[1; 32]; 8]);
-    }
-
-    pub fn test_text(&self, cs: CriticalSection) {
-        self.show_text(cs, "hi", false);
-    }
-
-    pub fn show_text(&self, cs: CriticalSection, text: &str, clear: bool) {
-        if clear {
-            self.clear(cs);
-        }
-
-        let mut pos = 0;
-        for c in text.chars() {
-            let character: Option<&Character> = get_character_struct(c);
-            match character {
-                Some(ch) => {
-                    self.show_char(cs, ch, pos);
-                    pos += ch.width + 1; // add column space between characters
-                }
-                None => info!("Letter {} not found", c),
-            }
-        }
-    }
-
-    fn show_char(&self, cs: CriticalSection, character: &Character, mut pos: usize) {
-        let mut matrix = self.0.borrow_ref_mut(cs);
-
-        pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
-
-        for row in 1..8 {
-            let byte = character.values[row - 1];
-            for col in 0..*character.width {
-                let c = pos + col;
-                matrix[row][c] = (byte >> col) % 2;
-            }
-        }
-    }
-
-    pub fn test_icons(&self, cs: CriticalSection) {
-        self.show_icon(cs, "AutoLight");
-        self.show_icon(cs, "Sat")
-    }
-
-    pub fn show_icon(&self, cs: CriticalSection, icon_text: &'static str) {
-        let mut matrix = self.0.borrow_ref_mut(cs);
-
-        let icon: Option<&Icon> = get_icon_struct(icon_text);
-        match icon {
-            Some(i) => {
-                for w in 0..i.width {
-                    matrix[i.y][i.x + w] = 1;
-                }
-            }
-            None => info!("Icon {} not found", icon_text),
-        }
-    }
-}
-
-const DISPLAY_MATRIX_INIT: DisplayMatrix = DisplayMatrix(Mutex::new(RefCell::new([[1; 32]; 8])));
-
-pub static DISPLAY_MATRIX: DisplayMatrix = DISPLAY_MATRIX_INIT;
 
 pub struct DisplayPins<'a> {
     a0: Output<'a, embassy_rp::peripherals::PIN_16>,
@@ -129,7 +57,7 @@ impl<'a> Display<'a> {
         self.row = (self.row + 1) % 8;
 
         critical_section::with(|cs| {
-            for col in DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
+            for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
                 self.pins.clk.set_low();
                 if col == 1 {
                     self.pins.sdi.set_high();
@@ -167,7 +95,120 @@ impl<'a> Display<'a> {
     }
 }
 
+pub mod display_matrix {
+    use super::*;
+
+    #[embassy_executor::task]
+    pub async fn process_text_buffer() -> ! {
+        loop {
+            let item = TEXT_BUFFER.recv().await;
+            DISPLAY_MATRIX.show_text(item);
+        }
+    }
+
+    struct TextBufferItem<'a> {
+        text: Vec<&'a Character<'a>, 32>,
+        clear: bool,
+    }
+
+    static TEXT_BUFFER: Channel<ThreadModeRawMutex, TextBufferItem<'_>, 16> = Channel::new();
+
+    pub struct DisplayMatrix(pub Mutex<RefCell<[[usize; 32]; 8]>>);
+
+    const DISPLAY_MATRIX_INIT: DisplayMatrix =
+        DisplayMatrix(Mutex::new(RefCell::new([[1; 32]; 8])));
+    pub static DISPLAY_MATRIX: DisplayMatrix = DISPLAY_MATRIX_INIT;
+
+    impl DisplayMatrix {
+        const DISPLAY_OFFSET: usize = 2;
+
+        pub fn clear(&self, cs: CriticalSection) {
+            self.0.replace(cs, [[0; 32]; 8]);
+        }
+
+        pub fn fill(&self, cs: CriticalSection) {
+            self.0.replace(cs, [[1; 32]; 8]);
+        }
+
+        pub async fn test_text(&self) {
+            self.queue_text("HI", false).await;
+        }
+
+        pub async fn queue_text(&self, text: &str, clear: bool) {
+            let mut final_text = text;
+            if text.len() > 32 {
+                final_text = &text[0..32];
+            }
+
+            let mut chars: Vec<&Character<'_>, 32> = Vec::new();
+
+            for c in final_text.chars() {
+                let character: Option<&Character> = get_character_struct(c);
+
+                if character.is_some() {
+                    let ch = character.unwrap();
+                    chars.extend([ch]);
+                }
+            }
+
+            let buf = TextBufferItem { text: chars, clear };
+            TEXT_BUFFER.send(buf).await;
+        }
+
+        fn show_text(&self, item: TextBufferItem<'_>) {
+            if item.clear {
+                critical_section::with(|cs| {
+                    self.clear(cs);
+                });
+            }
+
+            let mut pos = 0;
+
+            for c in item.text {
+                critical_section::with(|cs| {
+                    self.show_char(cs, c, pos);
+                });
+                pos += c.width + 1; // add column space between characters
+            }
+        }
+
+        fn show_char(&self, cs: CriticalSection, character: &Character, mut pos: usize) {
+            let mut matrix = self.0.borrow_ref_mut(cs);
+
+            pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
+
+            for row in 1..8 {
+                let byte = character.values[row - 1];
+                for col in 0..*character.width {
+                    let c = pos + col;
+                    matrix[row][c] = (byte >> col) % 2;
+                }
+            }
+        }
+
+        pub fn test_icons(&self, cs: CriticalSection) {
+            self.show_icon(cs, "AutoLight");
+            self.show_icon(cs, "Tue")
+        }
+
+        pub fn show_icon(&self, cs: CriticalSection, icon_text: &'static str) {
+            let mut matrix = self.0.borrow_ref_mut(cs);
+
+            let icon: Option<&Icon> = get_icon_struct(icon_text);
+            match icon {
+                Some(i) => {
+                    for w in 0..i.width {
+                        matrix[i.y][i.x + w] = 1;
+                    }
+                }
+                None => info!("Icon {} not found", icon_text),
+            }
+        }
+    }
+}
+
 mod text {
+    #[derive(Clone)]
     pub struct Character<'a> {
         pub width: &'a usize,
         pub values: &'a [usize],

@@ -7,7 +7,7 @@ mod display;
 use crate::display::{Display, DisplayPins};
 
 use defmt::info;
-use display::DISPLAY_MATRIX;
+use display::display_matrix::DISPLAY_MATRIX;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
     gpio::{Input, Level, Output, Pull},
@@ -63,10 +63,15 @@ async fn main_core(
 ) -> ! {
     spawner.spawn(logger_fn()).unwrap();
 
+    spawner
+        .spawn(display::display_matrix::process_text_buffer())
+        .unwrap();
+
     loop {
         if button_one.is_low() {
+            DISPLAY_MATRIX.test_text().await;
+
             critical_section::with(|cs| {
-                DISPLAY_MATRIX.test_text(cs);
                 DISPLAY_MATRIX.test_icons(cs);
             });
         }
