@@ -102,13 +102,14 @@ pub mod display_matrix {
     pub async fn process_text_buffer() -> ! {
         loop {
             let item = TEXT_BUFFER.recv().await;
-            DISPLAY_MATRIX.show_text(item);
+            DISPLAY_MATRIX.show_text(item).await;
         }
     }
 
     struct TextBufferItem<'a> {
         text: Vec<&'a Character<'a>, 32>,
         clear: bool,
+        hold_s: u64,
     }
 
     static TEXT_BUFFER: Channel<ThreadModeRawMutex, TextBufferItem<'_>, 16> = Channel::new();
@@ -122,16 +123,27 @@ pub mod display_matrix {
     impl DisplayMatrix {
         const DISPLAY_OFFSET: usize = 2;
 
-        pub fn clear(&self, cs: CriticalSection) {
+        pub fn clear_all(&self, cs: CriticalSection) {
             self.0.replace(cs, [[0; 32]; 8]);
         }
 
-        pub fn fill(&self, cs: CriticalSection) {
+        pub fn fill_all(&self, cs: CriticalSection) {
             self.0.replace(cs, [[1; 32]; 8]);
         }
 
+        pub fn clear(&self, cs: CriticalSection) {
+            let mut matrix = self.0.borrow_ref_mut(cs);
+
+            for row in 1..8 {
+                for col in 2..32 {
+                    matrix[row][col] = 0;
+                }
+            }
+        }
+
         pub async fn test_text(&self) {
-            self.queue_text("HI", false).await;
+            self.queue_text("HELLO WORLD", false).await;
+            self.queue_text("21:11", true).await;
         }
 
         pub async fn queue_text(&self, text: &str, clear: bool) {
@@ -145,44 +157,83 @@ pub mod display_matrix {
             for c in final_text.chars() {
                 let character: Option<&Character> = get_character_struct(c);
 
-                if character.is_some() {
-                    let ch = character.unwrap();
-                    chars.extend([ch]);
+                match character {
+                    Some(ch) => {
+                        chars.extend([ch]);
+                    }
+                    None => info!("Character {} not found", c),
                 }
             }
 
-            let buf = TextBufferItem { text: chars, clear };
+            let buf = TextBufferItem {
+                text: chars,
+                clear,
+                hold_s: 1,
+            };
             TEXT_BUFFER.send(buf).await;
         }
 
-        fn show_text(&self, item: TextBufferItem<'_>) {
+        async fn show_text(&self, item: TextBufferItem<'_>) {
             if item.clear {
                 critical_section::with(|cs| {
                     self.clear(cs);
                 });
             }
 
-            let mut pos = 0;
+            let mut total_width = 0;
 
-            for c in item.text {
-                critical_section::with(|cs| {
-                    self.show_char(cs, c, pos);
-                });
+            for c in &item.text {
+                total_width += c.width;
+            }
+
+            let mut pos = 0;
+            for c in &item.text {
+                self.show_char(c, pos).await;
                 pos += c.width + 1; // add column space between characters
             }
+
+            Timer::after(Duration::from_secs(item.hold_s)).await;
         }
 
-        fn show_char(&self, cs: CriticalSection, character: &Character, mut pos: usize) {
-            let mut matrix = self.0.borrow_ref_mut(cs);
+        async fn show_char(&self, character: &Character<'_>, mut pos: usize) {
+            let mut matrix = critical_section::with(|cs| self.0.borrow_ref(cs).clone());
 
             pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
+
+            let mut animated = false;
 
             for row in 1..8 {
                 let byte = character.values[row - 1];
                 for col in 0..*character.width {
-                    let c = pos + col;
+                    let mut c = pos + col;
+
+                    if c >= 28 - *character.width {
+                        if !animated {
+                            Timer::after(Duration::from_millis(500)).await;
+                            animated = true;
+                        }
+
+                        for column in 3..32 {
+                            matrix[row][column - 1] = matrix[row][column];
+                        }
+
+                        critical_section::with(|cs| self.0.replace(cs, matrix));
+
+                        c = 27 - *character.width;
+                    }
+
                     matrix[row][c] = (byte >> col) % 2;
                 }
+
+                // if hit end of the display, add a space at the end of the character
+                if animated {
+                    for column in 3..32 {
+                        matrix[row][column - 1] = matrix[row][column];
+                        matrix[row][column] = 0;
+                    }
+                }
+
+                critical_section::with(|cs| self.0.replace(cs, matrix));
             }
         }
 
@@ -220,7 +271,7 @@ mod text {
         }
     }
 
-    const CHARACTER_TABLE: [(char, Character); 40] = [
+    const CHARACTER_TABLE: [(char, Character); 42] = [
         (
             '0',
             Character::new(&4, &[0x06, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
@@ -344,6 +395,14 @@ mod text {
         (
             'U',
             Character::new(&4, &[0x09, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
+        ),
+        (
+            'V',
+            Character::new(&5, &[0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04]),
+        ),
+        (
+            'W',
+            Character::new(&5, &[0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11]),
         ),
         (
             'X',

@@ -81,7 +81,7 @@ async fn main_core(
 
         if button_three.is_low() {
             critical_section::with(|cs| {
-                DISPLAY_MATRIX.fill(cs);
+                DISPLAY_MATRIX.fill_all(cs);
             });
         }
 
