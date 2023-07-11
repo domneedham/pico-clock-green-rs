@@ -6,7 +6,6 @@ mod display;
 
 use crate::display::{Display, DisplayPins};
 
-use defmt::info;
 use display::display_matrix::DISPLAY_MATRIX;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
@@ -61,8 +60,6 @@ async fn main_core(
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
 ) -> ! {
-    spawner.spawn(logger_fn()).unwrap();
-
     spawner
         .spawn(display::display_matrix::process_text_buffer())
         .unwrap();
@@ -96,13 +93,5 @@ async fn main_core(
 async fn display_core(mut display: Display<'static>) -> ! {
     loop {
         display.update_display().await;
-    }
-}
-
-#[embassy_executor::task]
-async fn logger_fn() {
-    loop {
-        info!("Still alive!");
-        Timer::after(Duration::from_secs(5)).await;
     }
 }
