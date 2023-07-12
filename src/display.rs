@@ -96,23 +96,38 @@ impl<'a> Display<'a> {
 }
 
 pub mod display_matrix {
+    use embassy_futures::select::select;
+    use embassy_futures::select::Either::{First, Second};
+    use embassy_sync::signal::Signal;
+
     use super::*;
 
     #[embassy_executor::task]
     pub async fn process_text_buffer() -> ! {
         loop {
             let item = TEXT_BUFFER.recv().await;
-            DISPLAY_MATRIX.show_text(item).await;
+
+            CANCEL_SIGNAL.reset();
+
+            let completed_future =
+                select(DISPLAY_MATRIX.show_text(item), CANCEL_SIGNAL.wait()).await;
+
+            match completed_future {
+                First(_) => info!("Completed"),
+                Second(_) => info!("Task cancelled"),
+            };
         }
     }
 
     struct TextBufferItem<'a> {
         text: Vec<&'a Character<'a>, 32>,
-        clear: bool,
         hold_s: u64,
     }
 
+    struct DisplayClearSignal();
+
     static TEXT_BUFFER: Channel<ThreadModeRawMutex, TextBufferItem<'_>, 16> = Channel::new();
+    static CANCEL_SIGNAL: Signal<ThreadModeRawMutex, DisplayClearSignal> = Signal::new();
 
     pub struct DisplayMatrix(pub Mutex<RefCell<[[usize; 32]; 8]>>);
 
@@ -127,11 +142,19 @@ pub mod display_matrix {
             self.0.replace(cs, [[0; 32]; 8]);
         }
 
-        pub fn fill_all(&self, cs: CriticalSection) {
+        pub fn fill_all(&self, cs: CriticalSection, remove_queue: bool) {
+            if remove_queue {
+                Self::cancel_and_remove_queue();
+            }
+
             self.0.replace(cs, [[1; 32]; 8]);
         }
 
-        pub fn clear(&self, cs: CriticalSection) {
+        pub fn clear(&self, cs: CriticalSection, remove_queue: bool) {
+            if remove_queue {
+                Self::cancel_and_remove_queue();
+            }
+
             let mut matrix = self.0.borrow_ref_mut(cs);
 
             for row in 1..8 {
@@ -142,11 +165,15 @@ pub mod display_matrix {
         }
 
         pub async fn test_text(&self) {
-            self.queue_text("HELLO WORLD", false).await;
-            self.queue_text("21:11", true).await;
+            self.queue_text("HELLO WORLD", true).await;
+            self.queue_text("21:11", false).await;
         }
 
-        pub async fn queue_text(&self, text: &str, clear: bool) {
+        pub async fn queue_text(&self, text: &str, show_now: bool) {
+            if show_now {
+                Self::cancel_and_remove_queue()
+            }
+
             let mut final_text = text;
             if text.len() > 32 {
                 final_text = &text[0..32];
@@ -167,18 +194,16 @@ pub mod display_matrix {
 
             let buf = TextBufferItem {
                 text: chars,
-                clear,
                 hold_s: 1,
             };
+
             TEXT_BUFFER.send(buf).await;
         }
 
         async fn show_text(&self, item: TextBufferItem<'_>) {
-            if item.clear {
-                critical_section::with(|cs| {
-                    self.clear(cs);
-                });
-            }
+            critical_section::with(|cs| {
+                self.clear(cs, false);
+            });
 
             let mut total_width = 0;
 
@@ -257,6 +282,18 @@ pub mod display_matrix {
                     }
                 }
                 None => info!("Icon {} not found", icon_text),
+            }
+        }
+
+        fn cancel_and_remove_queue() {
+            CANCEL_SIGNAL.signal(DisplayClearSignal());
+
+            loop {
+                let res = TEXT_BUFFER.try_recv();
+                match res {
+                    Ok(_) => {}
+                    Err(_) => break,
+                }
             }
         }
     }
