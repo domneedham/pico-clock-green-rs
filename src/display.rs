@@ -209,7 +209,7 @@ pub mod display_matrix {
 
                     if c >= 28 - *character.width {
                         if !animated {
-                            Timer::after(Duration::from_millis(500)).await;
+                            Timer::after(Duration::from_millis(250)).await;
                             animated = true;
                         }
 
@@ -234,6 +234,10 @@ pub mod display_matrix {
                 }
 
                 critical_section::with(|cs| self.0.replace(cs, matrix));
+            }
+
+            if animated {
+                Timer::after(Duration::from_millis(250)).await;
             }
         }
 
