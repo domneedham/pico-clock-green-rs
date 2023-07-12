@@ -75,7 +75,7 @@ async fn main_core(
 
         if button_two.is_low() {
             critical_section::with(|cs| {
-                DISPLAY_MATRIX.clear(cs, true);
+                DISPLAY_MATRIX.clear_all(cs, true);
             });
         }
 

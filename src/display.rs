@@ -131,14 +131,17 @@ pub mod display_matrix {
 
     pub struct DisplayMatrix(pub Mutex<RefCell<[[usize; 32]; 8]>>);
 
-    const DISPLAY_MATRIX_INIT: DisplayMatrix =
+    pub static DISPLAY_MATRIX: DisplayMatrix =
         DisplayMatrix(Mutex::new(RefCell::new([[1; 32]; 8])));
-    pub static DISPLAY_MATRIX: DisplayMatrix = DISPLAY_MATRIX_INIT;
 
     impl DisplayMatrix {
         const DISPLAY_OFFSET: usize = 2;
 
-        pub fn clear_all(&self, cs: CriticalSection) {
+        pub fn clear_all(&self, cs: CriticalSection, remove_queue: bool) {
+            if remove_queue {
+                Self::cancel_and_remove_queue();
+            }
+
             self.0.replace(cs, [[0; 32]; 8]);
         }
 
@@ -221,7 +224,7 @@ pub mod display_matrix {
         }
 
         async fn show_char(&self, character: &Character<'_>, mut pos: usize) {
-            let mut matrix = critical_section::with(|cs| self.0.borrow_ref(cs).clone());
+            let mut matrix = critical_section::with(|cs| *self.0.borrow_ref(cs));
 
             pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
 
@@ -506,7 +509,7 @@ mod icons {
         }
     }
 
-    pub const ICON_TABLE: [(&'static str, Icon); 17] = [
+    pub const ICON_TABLE: [(&str, Icon); 17] = [
         ("MoveOn", Icon::new(0, 0, 2)),
         ("AlarmOn", Icon::new(0, 1, 2)),
         ("CountDown", Icon::new(0, 2, 2)),
