@@ -268,10 +268,12 @@ pub mod display_matrix {
 
         pub fn test_icons(&self, cs: CriticalSection) {
             self.show_icon(cs, "AutoLight");
-            self.show_icon(cs, "Tue")
+            self.show_icon(cs, "Tue");
+            self.hide_icon(cs, "Tue");
+            self.show_icon(cs, "Mon");
         }
 
-        pub fn show_icon(&self, cs: CriticalSection, icon_text: &'static str) {
+        pub fn show_icon(&self, cs: CriticalSection, icon_text: &str) {
             let mut matrix = self.0.borrow_ref_mut(cs);
 
             let icon: Option<&Icon> = get_icon_struct(icon_text);
@@ -279,6 +281,20 @@ pub mod display_matrix {
                 Some(i) => {
                     for w in 0..i.width {
                         matrix[i.y][i.x + w] = 1;
+                    }
+                }
+                None => info!("Icon {} not found", icon_text),
+            }
+        }
+
+        pub fn hide_icon(&self, cs: CriticalSection, icon_text: &str) {
+            let mut matrix = self.0.borrow_ref_mut(cs);
+
+            let icon: Option<&Icon> = get_icon_struct(icon_text);
+            match icon {
+                Some(i) => {
+                    for w in 0..i.width {
+                        matrix[i.y][i.x + w] = 0;
                     }
                 }
                 None => info!("Icon {} not found", icon_text),
@@ -542,7 +558,7 @@ mod icons {
         ("Sun", Icon::new(21, 0, 2)),
     ];
 
-    pub fn get_icon_struct(icon: &'static str) -> Option<&Icon> {
+    pub fn get_icon_struct(icon: &str) -> Option<&Icon> {
         for &(c, ref info) in &ICON_TABLE {
             if c == icon {
                 return Some(info);
