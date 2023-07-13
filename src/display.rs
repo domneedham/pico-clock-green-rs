@@ -216,12 +216,12 @@ pub mod display_matrix {
             }
 
             let mut pos = Self::DISPLAY_OFFSET;
-            for c in &item.text {
+            for c in item.text {
                 pos = self.show_char(c, pos).await;
-
                 pos += 2;
 
-                if pos >= Self::LAST_INDEX {
+                // if the position is greater than the last possible index and the total width is also greater (this won't be true for perfect fit items)
+                if pos >= Self::LAST_INDEX && total_width > Self::LAST_INDEX {
                     self.shift_text_left(true);
                 }
             }
