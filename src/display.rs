@@ -132,10 +132,11 @@ pub mod display_matrix {
     pub struct DisplayMatrix(pub Mutex<RefCell<[[usize; 32]; 8]>>);
 
     pub static DISPLAY_MATRIX: DisplayMatrix =
-        DisplayMatrix(Mutex::new(RefCell::new([[1; 32]; 8])));
+        DisplayMatrix(Mutex::new(RefCell::new([[0; 32]; 8])));
 
     impl DisplayMatrix {
         const DISPLAY_OFFSET: usize = 2;
+        const LAST_INDEX: usize = 24;
 
         pub fn clear_all(&self, cs: CriticalSection, remove_queue: bool) {
             if remove_queue {
@@ -169,7 +170,7 @@ pub mod display_matrix {
 
         pub async fn test_text(&self) {
             self.queue_text("HELLO WORLD", true).await;
-            self.queue_text("21:11", false).await;
+            // self.queue_text("21:11", false).await;
         }
 
         pub async fn queue_text(&self, text: &str, show_now: bool) {
@@ -214,59 +215,55 @@ pub mod display_matrix {
                 total_width += c.width;
             }
 
-            let mut pos = 0;
+            let mut pos = Self::DISPLAY_OFFSET;
             for c in &item.text {
-                self.show_char(c, pos).await;
-                pos += c.width + 1; // add column space between characters
+                pos = self.show_char(c, pos).await;
+
+                pos += 2;
+
+                if pos >= Self::LAST_INDEX {
+                    self.shift_text_left(true);
+                }
             }
 
             Timer::after(Duration::from_secs(item.hold_s)).await;
         }
 
-        async fn show_char(&self, character: &Character<'_>, mut pos: usize) {
+        async fn show_char(&self, character: &Character<'_>, mut pos: usize) -> usize {
             let mut matrix = critical_section::with(|cs| *self.0.borrow_ref(cs));
 
-            pos += Self::DISPLAY_OFFSET; // Plus the offset of the status indicator
+            let first_pos = pos;
+            let mut hit_end_of_display = false;
 
-            let mut animated = false;
+            for col in 0..*character.width {
+                pos = first_pos + col;
 
-            for row in 1..8 {
-                let byte = character.values[row - 1];
-                for col in 0..*character.width {
-                    let mut c = pos + col;
-
-                    if c >= 28 - *character.width {
-                        if !animated {
-                            Timer::after(Duration::from_millis(250)).await;
-                            animated = true;
-                        }
-
-                        for column in 3..32 {
-                            matrix[row][column - 1] = matrix[row][column];
-                        }
-
-                        critical_section::with(|cs| self.0.replace(cs, matrix));
-
-                        c = 27 - *character.width;
+                if pos > Self::LAST_INDEX {
+                    // if first time hitting end of display, pause for better readability
+                    if !hit_end_of_display {
+                        Timer::after(Duration::from_millis(300)).await;
+                        hit_end_of_display = true;
                     }
 
-                    matrix[row][c] = (byte >> col) % 2;
+                    pos = Self::LAST_INDEX;
+
+                    self.shift_text_left(false);
+
+                    Timer::after(Duration::from_millis(300)).await;
+
+                    // grab matrix again after update
+                    matrix = critical_section::with(|cs| *self.0.borrow_ref(cs));
                 }
 
-                // if hit end of the display, add a space at the end of the character
-                if animated {
-                    for column in 3..32 {
-                        matrix[row][column - 1] = matrix[row][column];
-                        matrix[row][column] = 0;
-                    }
+                for (row, item) in matrix.iter_mut().enumerate().skip(1) {
+                    let byte = character.values[row - 1];
+                    item[pos] = (byte >> col) % 2;
                 }
 
                 critical_section::with(|cs| self.0.replace(cs, matrix));
             }
 
-            if animated {
-                Timer::after(Duration::from_millis(250)).await;
-            }
+            pos
         }
 
         pub fn test_icons(&self, cs: CriticalSection) {
@@ -286,6 +283,22 @@ pub mod display_matrix {
                 }
                 None => info!("Icon {} not found", icon_text),
             }
+        }
+
+        fn shift_text_left(&self, add_space: bool) {
+            let mut matrix = critical_section::with(|cs| *self.0.borrow_ref(cs));
+
+            for item in matrix.iter_mut().skip(1) {
+                // start from here to account for icon width buffer
+                for col in 4..32 {
+                    item[col - 2] = item[col - 1];
+                    if add_space {
+                        item[col - 1] = 0;
+                    }
+                }
+            }
+
+            critical_section::with(|cs| self.0.replace(cs, matrix));
         }
 
         fn cancel_and_remove_queue() {
