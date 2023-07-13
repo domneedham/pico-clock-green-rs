@@ -132,7 +132,7 @@ pub mod display_matrix {
     pub struct DisplayMatrix(pub Mutex<RefCell<[[usize; 32]; 8]>>);
 
     pub static DISPLAY_MATRIX: DisplayMatrix =
-        DisplayMatrix(Mutex::new(RefCell::new([[0; 32]; 8])));
+        DisplayMatrix(Mutex::new(RefCell::new([[1; 32]; 8])));
 
     impl DisplayMatrix {
         const DISPLAY_OFFSET: usize = 2;
@@ -170,7 +170,7 @@ pub mod display_matrix {
 
         pub async fn test_text(&self) {
             self.queue_text("HELLO WORLD", true).await;
-            // self.queue_text("21:11", false).await;
+            self.queue_text("21:11", false).await;
         }
 
         pub async fn queue_text(&self, text: &str, show_now: bool) {
