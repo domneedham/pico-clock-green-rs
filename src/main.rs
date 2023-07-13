@@ -1,73 +1,97 @@
-//! Blinks the LED on a Pico board
-//!
-//! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
 #![no_main]
+#![feature(type_alias_impl_trait)]
 
-use bsp::entry;
-use defmt::*;
-use defmt_rtt as _;
-use embedded_hal::digital::v2::OutputPin;
-use panic_probe as _;
+mod display;
 
-// Provide an alias for our BSP so we can switch targets quickly.
-// Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
-use rp_pico as bsp;
-// use sparkfun_pro_micro_rp2040 as bsp;
+use crate::display::{Display, DisplayPins};
 
-use bsp::hal::{
-    clocks::{init_clocks_and_plls, Clock},
-    pac,
-    sio::Sio,
-    watchdog::Watchdog,
+use display::display_matrix::DISPLAY_MATRIX;
+use embassy_executor::{Executor, Spawner, _export::StaticCell};
+use embassy_rp::{
+    gpio::{Input, Level, Output, Pull},
+    multicore::Stack,
+    peripherals::*,
 };
+use embassy_time::{Duration, Timer};
+use {defmt as _, defmt_rtt as _, panic_probe as _};
 
-#[entry]
+static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
+static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
+static mut CORE1_STACK: Stack<4096> = Stack::new();
+
+#[cortex_m_rt::entry]
 fn main() -> ! {
-    info!("Program start");
-    let mut pac = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
-    let mut watchdog = Watchdog::new(pac.WATCHDOG);
-    let sio = Sio::new(pac.SIO);
+    let p = embassy_rp::init(Default::default());
 
-    // External high-speed crystal on the pico board is 12Mhz
-    let external_xtal_freq_hz = 12_000_000u32;
-    let clocks = init_clocks_and_plls(
-        external_xtal_freq_hz,
-        pac.XOSC,
-        pac.CLOCKS,
-        pac.PLL_SYS,
-        pac.PLL_USB,
-        &mut pac.RESETS,
-        &mut watchdog,
-    )
-    .ok()
-    .unwrap();
+    // init buttons
+    let button_one: Input<'_, PIN_2> = Input::new(p.PIN_2, Pull::Up);
+    let button_two: Input<'_, PIN_17> = Input::new(p.PIN_17, Pull::Up);
+    let button_three: Input<'_, PIN_15> = Input::new(p.PIN_15, Pull::Up);
 
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+    // init display
+    let a0: Output<'_, PIN_16> = Output::new(p.PIN_16, Level::Low);
+    let a1: Output<'_, PIN_18> = Output::new(p.PIN_18, Level::Low);
+    let a2: Output<'_, PIN_22> = Output::new(p.PIN_22, Level::Low);
+    let oe: Output<'_, PIN_13> = Output::new(p.PIN_13, Level::Low);
+    let sdi: Output<'_, PIN_11> = Output::new(p.PIN_11, Level::Low);
+    let clk: Output<'_, PIN_10> = Output::new(p.PIN_10, Level::Low);
+    let le: Output<'_, PIN_12> = Output::new(p.PIN_12, Level::Low);
+    let display_pins: DisplayPins<'_> = DisplayPins::new(a0, a1, a2, oe, sdi, clk, le);
+    let display: Display<'_> = Display::new(display_pins);
 
-    let pins = bsp::Pins::new(
-        pac.IO_BANK0,
-        pac.PADS_BANK0,
-        sio.gpio_bank0,
-        &mut pac.RESETS,
-    );
+    embassy_rp::multicore::spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
+        let executor1 = EXECUTOR1.init(Executor::new());
+        executor1.run(|spawner| spawner.spawn(display_core(display)).unwrap());
+    });
 
-    // This is the correct pin on the Raspberry Pico board. On other boards, even if they have an
-    // on-board LED, it might need to be changed.
-    // Notably, on the Pico W, the LED is not connected to any of the RP2040 GPIOs but to the cyw43 module instead. If you have
-    // a Pico W and want to toggle a LED with a simple GPIO output pin, you can connect an external
-    // LED to one of the GPIO pins, and reference that pin here.
-    let mut led_pin = pins.led.into_push_pull_output();
+    let executor0 = EXECUTOR0.init(Executor::new());
+    executor0.run(|spawner| {
+        spawner
+            .spawn(main_core(spawner, button_one, button_two, button_three))
+            .unwrap();
+    });
+}
+
+#[embassy_executor::task]
+async fn main_core(
+    spawner: Spawner,
+    button_one: Input<'static, PIN_2>,
+    button_two: Input<'static, PIN_17>,
+    button_three: Input<'static, PIN_15>,
+) -> ! {
+    spawner
+        .spawn(display::display_matrix::process_text_buffer())
+        .unwrap();
 
     loop {
-        info!("on!");
-        led_pin.set_high().unwrap();
-        delay.delay_ms(500);
-        info!("off!");
-        led_pin.set_low().unwrap();
-        delay.delay_ms(500);
+        if button_one.is_low() {
+            DISPLAY_MATRIX.test_text().await;
+
+            critical_section::with(|cs| {
+                DISPLAY_MATRIX.test_icons(cs);
+            });
+        }
+
+        if button_two.is_low() {
+            critical_section::with(|cs| {
+                DISPLAY_MATRIX.clear_all(cs, true);
+            });
+        }
+
+        if button_three.is_low() {
+            critical_section::with(|cs| {
+                DISPLAY_MATRIX.fill_all(cs, true);
+            });
+        }
+
+        Timer::after(Duration::from_millis(100)).await;
     }
 }
 
-// End of file
+#[embassy_executor::task]
+async fn display_core(mut display: Display<'static>) -> ! {
+    loop {
+        display.update_display().await;
+    }
+}
