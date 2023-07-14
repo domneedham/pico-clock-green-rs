@@ -7,11 +7,12 @@ mod app;
 mod display;
 
 mod clock;
+mod pomodoro;
 
 use crate::display::{Display, DisplayPins};
 
 use app::AppSwitcher;
-use clock::{ClockApp, PomodoroApp};
+use clock::ClockApp;
 use display::display_matrix::DISPLAY_MATRIX;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
@@ -20,6 +21,7 @@ use embassy_rp::{
     peripherals::*,
 };
 use embassy_time::{Duration, Timer};
+use pomodoro::PomodoroApp;
 use {defmt as _, defmt_rtt as _, panic_probe as _};
 
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
@@ -72,7 +74,7 @@ async fn main_core(
 
     let clock_app = ClockApp { name: "Clock" };
     let pomodoro_app = PomodoroApp { name: "Pomodoro" };
-    let mut app_switcher = AppSwitcher::new(clock_app, pomodoro_app);
+    let mut app_switcher = AppSwitcher::new(spawner, clock_app, pomodoro_app);
 
     loop {
         if button_one.is_low() {
