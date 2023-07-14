@@ -1,8 +1,15 @@
 use defmt::info;
 use embassy_executor::Spawner;
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, pubsub::PubSubChannel};
 use embassy_time::{Duration, Timer};
 
-use crate::{app::App, display::display_matrix::DISPLAY_MATRIX};
+use crate::{
+    app::{App, StopAppTasks},
+    display::display_matrix::DISPLAY_MATRIX,
+};
+
+static PUB_SUB_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
+    PubSubChannel::new();
 
 #[derive(PartialEq)]
 pub struct ClockApp<'a> {
@@ -20,14 +27,23 @@ impl<'a> App<'a> for ClockApp<'a> {
     }
 
     async fn stop(&self) {
-        // do nothing yet.
+        PUB_SUB_CHANNEL
+            .immediate_publisher()
+            .publish_immediate(StopAppTasks());
     }
 }
 
 #[embassy_executor::task]
-async fn clock() -> ! {
+async fn clock() {
+    let mut sub = PUB_SUB_CHANNEL.subscriber().unwrap();
     loop {
+        let res = sub.try_next_message();
+        if res.is_some() {
+            break;
+        }
+
         info!("Would update time");
+
         Timer::after(Duration::from_secs(1)).await;
     }
 }

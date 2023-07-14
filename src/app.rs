@@ -2,6 +2,9 @@ use embassy_executor::Spawner;
 
 use crate::{clock::ClockApp, display::display_matrix::DISPLAY_MATRIX, pomodoro::PomodoroApp};
 
+#[derive(Clone)]
+pub struct StopAppTasks();
+
 pub trait App<'a> {
     fn get_name(&self) -> &'a str;
 
