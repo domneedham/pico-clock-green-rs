@@ -1,11 +1,17 @@
 #![no_std]
 #![no_main]
+#![feature(async_fn_in_trait)]
 #![feature(type_alias_impl_trait)]
 
+mod app;
 mod display;
+
+mod clock;
 
 use crate::display::{Display, DisplayPins};
 
+use app::AppSwitcher;
+use clock::{ClockApp, PomodoroApp};
 use display::display_matrix::DISPLAY_MATRIX;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
@@ -64,27 +70,48 @@ async fn main_core(
         .spawn(display::display_matrix::process_text_buffer())
         .unwrap();
 
+    let clock_app = ClockApp { name: "Clock" };
+    let pomodoro_app = PomodoroApp { name: "Pomodoro" };
+    let mut app_switcher = AppSwitcher::new(clock_app, pomodoro_app);
+
     loop {
         if button_one.is_low() {
-            DISPLAY_MATRIX.test_text().await;
+            if !app_switcher.showing_app_picker {
+                app_switcher.show_app_picker().await;
+            } else {
+                app_switcher.app_selected().await;
+            }
 
-            critical_section::with(|cs| {
-                DISPLAY_MATRIX.test_icons(cs);
-            });
+            Timer::after(Duration::from_millis(500)).await;
         }
 
         if button_two.is_low() {
-            critical_section::with(|cs| {
-                DISPLAY_MATRIX.clear_all(cs, true);
-            });
+            if app_switcher.showing_app_picker {
+                app_switcher.show_next_app().await;
+            } else {
+                critical_section::with(|cs| {
+                    DISPLAY_MATRIX.clear_all(cs, true);
+                });
+            }
+
+            Timer::after(Duration::from_millis(500)).await;
         }
 
         if button_three.is_low() {
-            critical_section::with(|cs| {
-                DISPLAY_MATRIX.fill_all(cs, true);
-            });
+            if app_switcher.showing_app_picker {
+                app_switcher.show_previous_app().await;
+            } else {
+                DISPLAY_MATRIX.test_text().await;
+
+                critical_section::with(|cs| {
+                    DISPLAY_MATRIX.test_icons(cs);
+                });
+            }
+
+            Timer::after(Duration::from_millis(500)).await;
         }
 
+        // let other tasks run
         Timer::after(Duration::from_millis(100)).await;
     }
 }
