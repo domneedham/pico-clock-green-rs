@@ -1,6 +1,15 @@
-use defmt::info;
 use embassy_rp::{gpio::Input, peripherals::*};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, signal::Signal};
 use embassy_time::{Duration, Instant, Timer};
+
+pub enum ButtonPress {
+    ShortPress,
+    LongPress,
+}
+
+pub static BUTTON_ONE_PRESS: Signal<ThreadModeRawMutex, ButtonPress> = Signal::new();
+pub static BUTTON_TWO_PRESS: Signal<ThreadModeRawMutex, ButtonPress> = Signal::new();
+pub static BUTTON_THREE_PRESS: Signal<ThreadModeRawMutex, ButtonPress> = Signal::new();
 
 #[embassy_executor::task]
 pub async fn button_one_task(mut button: Input<'static, PIN_2>) -> ! {
@@ -13,10 +22,13 @@ pub async fn button_one_task(mut button: Input<'static, PIN_2>) -> ! {
         let diff = end.duration_since(start).as_millis();
 
         if diff > 500 {
-            info!("Long press");
+            BUTTON_ONE_PRESS.signal(ButtonPress::LongPress);
         } else {
-            info!("Short press");
+            BUTTON_ONE_PRESS.signal(ButtonPress::ShortPress);
         }
+
+        // add debounce
+        Timer::after(Duration::from_millis(200)).await;
     }
 }
 
@@ -31,10 +43,13 @@ pub async fn button_two_task(mut button: Input<'static, PIN_17>) -> ! {
         let diff = end.duration_since(start).as_millis();
 
         if diff > 500 {
-            info!("Long press");
+            BUTTON_TWO_PRESS.signal(ButtonPress::LongPress);
         } else {
-            info!("Short press");
+            BUTTON_TWO_PRESS.signal(ButtonPress::ShortPress);
         }
+
+        // add debounce
+        Timer::after(Duration::from_millis(200)).await;
     }
 }
 
@@ -49,9 +64,12 @@ pub async fn button_three_task(mut button: Input<'static, PIN_15>) -> ! {
         let diff = end.duration_since(start).as_millis();
 
         if diff > 500 {
-            info!("Long press");
+            BUTTON_THREE_PRESS.signal(ButtonPress::LongPress);
         } else {
-            info!("Short press");
+            BUTTON_THREE_PRESS.signal(ButtonPress::ShortPress);
         }
+
+        // add debounce
+        Timer::after(Duration::from_millis(200)).await;
     }
 }

@@ -1,6 +1,9 @@
 use embassy_executor::Spawner;
 
-use crate::{clock::ClockApp, display::display_matrix::DISPLAY_MATRIX, pomodoro::PomodoroApp};
+use crate::{
+    buttons::ButtonPress, clock::ClockApp, display::display_matrix::DISPLAY_MATRIX,
+    pomodoro::PomodoroApp,
+};
 
 #[derive(Clone)]
 pub struct StopAppTasks();
@@ -10,6 +13,10 @@ pub trait App<'a> {
 
     async fn start(&self, spawner: Spawner);
     async fn stop(&self);
+
+    async fn button_one_short_press(&self);
+    async fn button_two_press(&self, press: ButtonPress);
+    async fn button_three_press(&self, press: ButtonPress);
 }
 
 #[derive(PartialEq)]
@@ -18,7 +25,7 @@ enum Apps {
     PomodoroAppOption,
 }
 
-pub struct AppSwitcher<'a> {
+pub struct AppController<'a> {
     pub showing_app_picker: bool,
     pub clock_app: ClockApp<'a>,
     pub pomodoro_app: PomodoroApp<'a>,
@@ -26,7 +33,7 @@ pub struct AppSwitcher<'a> {
     spawner: Spawner,
 }
 
-impl<'a> AppSwitcher<'a> {
+impl<'a> AppController<'a> {
     pub fn new(spawner: Spawner, clock_app: ClockApp<'a>, pomodoro_app: PomodoroApp<'a>) -> Self {
         Self {
             showing_app_picker: false,
@@ -37,7 +44,51 @@ impl<'a> AppSwitcher<'a> {
         }
     }
 
-    pub async fn show_app_picker(&mut self) {
+    pub async fn start(&mut self) {
+        self.app_selected().await;
+    }
+
+    pub async fn button_one_press(&mut self, press: ButtonPress) {
+        match press {
+            ButtonPress::ShortPress => {
+                if self.showing_app_picker {
+                    self.app_selected().await;
+                } else {
+                    match self.active_app {
+                        Apps::ClockAppOption => self.clock_app.button_one_short_press().await,
+                        Apps::PomodoroAppOption => self.pomodoro_app.button_one_short_press().await,
+                    }
+                }
+            }
+            ButtonPress::LongPress => self.show_app_picker().await,
+        }
+    }
+
+    pub async fn button_two_press(&mut self, press: ButtonPress) {
+        if self.showing_app_picker {
+            self.show_next_app().await;
+            return;
+        }
+
+        match self.active_app {
+            Apps::ClockAppOption => self.clock_app.button_two_press(press).await,
+            Apps::PomodoroAppOption => self.pomodoro_app.button_two_press(press).await,
+        };
+    }
+
+    pub async fn button_three_press(&mut self, press: ButtonPress) {
+        if self.showing_app_picker {
+            self.show_previous_app().await;
+            return;
+        }
+
+        match self.active_app {
+            Apps::ClockAppOption => self.clock_app.button_three_press(press).await,
+            Apps::PomodoroAppOption => self.pomodoro_app.button_three_press(press).await,
+        };
+    }
+
+    async fn show_app_picker(&mut self) {
         self.showing_app_picker = true;
 
         match self.active_app {
@@ -48,7 +99,7 @@ impl<'a> AppSwitcher<'a> {
         self.show_next_app().await;
     }
 
-    pub async fn show_next_app(&mut self) {
+    async fn show_next_app(&mut self) {
         match self.active_app {
             Apps::ClockAppOption => {
                 DISPLAY_MATRIX
@@ -67,7 +118,7 @@ impl<'a> AppSwitcher<'a> {
         }
     }
 
-    pub async fn show_previous_app(&mut self) {
+    async fn show_previous_app(&mut self) {
         match self.active_app {
             Apps::ClockAppOption => {
                 DISPLAY_MATRIX
@@ -86,7 +137,7 @@ impl<'a> AppSwitcher<'a> {
         }
     }
 
-    pub async fn app_selected(&mut self) {
+    async fn app_selected(&mut self) {
         self.showing_app_picker = false;
 
         match self.active_app {

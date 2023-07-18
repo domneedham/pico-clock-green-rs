@@ -1,3 +1,4 @@
+use defmt::info;
 use embassy_executor::Spawner;
 
 use crate::{app::App, display::display_matrix::DISPLAY_MATRIX};
@@ -18,5 +19,17 @@ impl<'a> App<'a> for PomodoroApp<'a> {
 
     async fn stop(&self) {
         // do nothing yet.
+    }
+
+    async fn button_one_short_press(&self) {
+        info!("POMO");
+    }
+
+    async fn button_two_press(&self, press: crate::buttons::ButtonPress) {
+        info!("POMO");
+    }
+
+    async fn button_three_press(&self, press: crate::buttons::ButtonPress) {
+        info!("POMO");
     }
 }

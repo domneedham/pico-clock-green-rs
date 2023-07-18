@@ -31,6 +31,18 @@ impl<'a> App<'a> for ClockApp<'a> {
             .immediate_publisher()
             .publish_immediate(StopAppTasks());
     }
+
+    async fn button_one_short_press(&self) {
+        info!("CLock");
+    }
+
+    async fn button_two_press(&self, press: crate::buttons::ButtonPress) {
+        info!("CLock");
+    }
+
+    async fn button_three_press(&self, press: crate::buttons::ButtonPress) {
+        info!("CLock");
+    }
 }
 
 #[embassy_executor::task]
