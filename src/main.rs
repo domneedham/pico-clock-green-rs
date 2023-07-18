@@ -4,6 +4,7 @@
 #![feature(type_alias_impl_trait)]
 
 mod app;
+mod buttons;
 mod display;
 
 mod clock;
@@ -67,55 +68,20 @@ async fn main_core(
     button_one: Input<'static, PIN_2>,
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
-) -> ! {
+) {
     spawner
         .spawn(display::display_matrix::process_text_buffer())
+        .unwrap();
+
+    spawner.spawn(buttons::button_one_task(button_one)).unwrap();
+    spawner.spawn(buttons::button_two_task(button_two)).unwrap();
+    spawner
+        .spawn(buttons::button_three_task(button_three))
         .unwrap();
 
     let clock_app = ClockApp { name: "Clock" };
     let pomodoro_app = PomodoroApp { name: "Pomodoro" };
     let mut app_switcher = AppSwitcher::new(spawner, clock_app, pomodoro_app);
-
-    loop {
-        if button_one.is_low() {
-            if !app_switcher.showing_app_picker {
-                app_switcher.show_app_picker().await;
-            } else {
-                app_switcher.app_selected().await;
-            }
-
-            Timer::after(Duration::from_millis(500)).await;
-        }
-
-        if button_two.is_low() {
-            if app_switcher.showing_app_picker {
-                app_switcher.show_next_app().await;
-            } else {
-                critical_section::with(|cs| {
-                    DISPLAY_MATRIX.clear_all(cs, true);
-                });
-            }
-
-            Timer::after(Duration::from_millis(500)).await;
-        }
-
-        if button_three.is_low() {
-            if app_switcher.showing_app_picker {
-                app_switcher.show_previous_app().await;
-            } else {
-                DISPLAY_MATRIX.test_text().await;
-
-                critical_section::with(|cs| {
-                    DISPLAY_MATRIX.test_icons(cs);
-                });
-            }
-
-            Timer::after(Duration::from_millis(500)).await;
-        }
-
-        // let other tasks run
-        Timer::after(Duration::from_millis(100)).await;
-    }
 }
 
 #[embassy_executor::task]
