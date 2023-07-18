@@ -14,9 +14,11 @@ use crate::display::{Display, DisplayPins};
 
 use app::AppController;
 use clock::ClockApp;
+use ds323x::Ds323x;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
     gpio::{Input, Level, Output, Pull},
+    i2c::{self, Config},
     multicore::Stack,
     peripherals::*,
 };
@@ -30,6 +32,10 @@ static mut CORE1_STACK: Stack<4096> = Stack::new();
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
+
+    // init rtc
+    let i2c = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6, Config::default());
+    let rtc = Ds323x::new_ds3231(i2c);
 
     // init buttons
     let button_one: Input<'_, PIN_2> = Input::new(p.PIN_2, Pull::Up);
