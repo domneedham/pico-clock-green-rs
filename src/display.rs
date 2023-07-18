@@ -53,45 +53,47 @@ impl<'a> Display<'a> {
         Self { pins, row: 0 }
     }
 
-    pub async fn update_display(&mut self) {
-        self.row = (self.row + 1) % 8;
+    pub async fn run_forever(&mut self) -> ! {
+        loop {
+            self.row = (self.row + 1) % 8;
 
-        critical_section::with(|cs| {
-            for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
-                self.pins.clk.set_low();
-                if col == 1 {
-                    self.pins.sdi.set_high();
-                } else {
-                    self.pins.sdi.set_low();
+            critical_section::with(|cs| {
+                for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
+                    self.pins.clk.set_low();
+                    if col == 1 {
+                        self.pins.sdi.set_high();
+                    } else {
+                        self.pins.sdi.set_low();
+                    }
+                    self.pins.clk.set_high();
                 }
-                self.pins.clk.set_high();
+            });
+
+            self.pins.le.set_high();
+            self.pins.le.set_low();
+
+            if self.row & 0x01 != 0 {
+                self.pins.a0.set_high();
+            } else {
+                self.pins.a0.set_low();
             }
-        });
 
-        self.pins.le.set_high();
-        self.pins.le.set_low();
+            if self.row & 0x02 != 0 {
+                self.pins.a1.set_high();
+            } else {
+                self.pins.a1.set_low();
+            }
 
-        if self.row & 0x01 != 0 {
-            self.pins.a0.set_high();
-        } else {
-            self.pins.a0.set_low();
+            if self.row & 0x04 != 0 {
+                self.pins.a2.set_high();
+            } else {
+                self.pins.a2.set_low();
+            }
+
+            self.pins.oe.set_low();
+            Timer::after(Duration::from_micros(100)).await;
+            self.pins.oe.set_high();
         }
-
-        if self.row & 0x02 != 0 {
-            self.pins.a1.set_high();
-        } else {
-            self.pins.a1.set_low();
-        }
-
-        if self.row & 0x04 != 0 {
-            self.pins.a2.set_high();
-        } else {
-            self.pins.a2.set_low();
-        }
-
-        self.pins.oe.set_low();
-        Timer::after(Duration::from_micros(100)).await;
-        self.pins.oe.set_high();
     }
 }
 
@@ -132,7 +134,7 @@ pub mod display_matrix {
     pub struct DisplayMatrix(pub Mutex<RefCell<[[usize; 32]; 8]>>);
 
     pub static DISPLAY_MATRIX: DisplayMatrix =
-        DisplayMatrix(Mutex::new(RefCell::new([[1; 32]; 8])));
+        DisplayMatrix(Mutex::new(RefCell::new([[0; 32]; 8])));
 
     impl DisplayMatrix {
         const DISPLAY_OFFSET: usize = 2;

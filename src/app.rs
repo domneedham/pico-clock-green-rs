@@ -1,7 +1,10 @@
 use embassy_executor::Spawner;
+use embassy_futures::select::{select3, Either3::First, Either3::Second, Either3::Third};
 
 use crate::{
-    buttons::ButtonPress, clock::ClockApp, display::display_matrix::DISPLAY_MATRIX,
+    buttons::{ButtonPress, BUTTON_ONE_PRESS, BUTTON_THREE_PRESS, BUTTON_TWO_PRESS},
+    clock::ClockApp,
+    display::display_matrix::DISPLAY_MATRIX,
     pomodoro::PomodoroApp,
 };
 
@@ -44,8 +47,23 @@ impl<'a> AppController<'a> {
         }
     }
 
-    pub async fn start(&mut self) {
+    pub async fn run_forever(&mut self) -> ! {
         self.app_selected().await;
+
+        loop {
+            let button_press = select3(
+                BUTTON_ONE_PRESS.wait(),
+                BUTTON_TWO_PRESS.wait(),
+                BUTTON_THREE_PRESS.wait(),
+            )
+            .await;
+
+            match button_press {
+                First(press) => self.button_one_press(press).await,
+                Second(press) => self.button_two_press(press).await,
+                Third(press) => self.button_three_press(press).await,
+            }
+        }
     }
 
     pub async fn button_one_press(&mut self, press: ButtonPress) {

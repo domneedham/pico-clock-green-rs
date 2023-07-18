@@ -13,10 +13,8 @@ mod pomodoro;
 use crate::display::{Display, DisplayPins};
 
 use app::AppController;
-use buttons::{BUTTON_ONE_PRESS, BUTTON_THREE_PRESS, BUTTON_TWO_PRESS};
 use clock::ClockApp;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
-use embassy_futures::{select::select3, select::Either3::*};
 use embassy_rp::{
     gpio::{Input, Level, Output, Pull},
     multicore::Stack,
@@ -82,27 +80,10 @@ async fn main_core(
     let clock_app = ClockApp { name: "Clock" };
     let pomodoro_app = PomodoroApp { name: "Pomodoro" };
     let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app);
-    app_controller.start().await;
-
-    loop {
-        let button_press = select3(
-            BUTTON_ONE_PRESS.wait(),
-            BUTTON_TWO_PRESS.wait(),
-            BUTTON_THREE_PRESS.wait(),
-        )
-        .await;
-
-        match button_press {
-            First(press) => app_controller.button_one_press(press).await,
-            Second(press) => app_controller.button_two_press(press).await,
-            Third(press) => app_controller.button_three_press(press).await,
-        }
-    }
+    app_controller.run_forever().await;
 }
 
 #[embassy_executor::task]
-async fn display_core(mut display: Display<'static>) -> ! {
-    loop {
-        display.update_display().await;
-    }
+async fn display_core(mut display: Display<'static>) {
+    display.run_forever().await;
 }

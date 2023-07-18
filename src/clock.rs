@@ -1,5 +1,6 @@
 use defmt::info;
 use embassy_executor::Spawner;
+use embassy_futures::select::{select, Either::First, Either::Second};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, pubsub::PubSubChannel};
 use embassy_time::{Duration, Timer};
 
@@ -33,15 +34,23 @@ impl<'a> App<'a> for ClockApp<'a> {
     }
 
     async fn button_one_short_press(&self) {
-        info!("CLock");
+        DISPLAY_MATRIX.test_text().await;
+
+        critical_section::with(|cs| {
+            DISPLAY_MATRIX.test_icons(cs);
+        });
     }
 
-    async fn button_two_press(&self, press: crate::buttons::ButtonPress) {
-        info!("CLock");
+    async fn button_two_press(&self, _: crate::buttons::ButtonPress) {
+        critical_section::with(|cs| {
+            DISPLAY_MATRIX.clear_all(cs, true);
+        });
     }
 
-    async fn button_three_press(&self, press: crate::buttons::ButtonPress) {
-        info!("CLock");
+    async fn button_three_press(&self, _: crate::buttons::ButtonPress) {
+        critical_section::with(|cs| {
+            DISPLAY_MATRIX.fill_all(cs, true);
+        });
     }
 }
 
@@ -49,13 +58,11 @@ impl<'a> App<'a> for ClockApp<'a> {
 async fn clock() {
     let mut sub = PUB_SUB_CHANNEL.subscriber().unwrap();
     loop {
-        let res = sub.try_next_message();
-        if res.is_some() {
-            break;
+        let res = select(sub.next_message(), Timer::after(Duration::from_secs(1))).await;
+
+        match res {
+            First(_) => break,
+            Second(_) => info!("Would update time"),
         }
-
-        info!("Would update time");
-
-        Timer::after(Duration::from_secs(1)).await;
     }
 }
