@@ -2,9 +2,14 @@ use embassy_executor::Spawner;
 
 use crate::{app::App, display::display_matrix::DISPLAY_MATRIX};
 
-#[derive(PartialEq)]
 pub struct PomodoroApp<'a> {
     pub name: &'a str,
+}
+
+impl<'a> PomodoroApp<'a> {
+    pub fn new(name: &'a str) -> Self {
+        Self { name }
+    }
 }
 
 impl<'a> App<'a> for PomodoroApp<'a> {

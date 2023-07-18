@@ -5,10 +5,10 @@
 
 mod app;
 mod buttons;
-mod display;
-
 mod clock;
+mod display;
 mod pomodoro;
+mod rtc;
 
 use crate::display::{Display, DisplayPins};
 
@@ -23,6 +23,7 @@ use embassy_rp::{
     peripherals::*,
 };
 use pomodoro::PomodoroApp;
+use rtc::RTC;
 use {defmt as _, defmt_rtt as _, panic_probe as _};
 
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
@@ -35,7 +36,11 @@ fn main() -> ! {
 
     // init rtc
     let i2c = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6, Config::default());
-    let rtc = Ds323x::new_ds3231(i2c);
+    let ds3231: Ds323x<
+        ds323x::interface::I2cInterface<i2c::I2c<'_, I2C1, i2c::Blocking>>,
+        ds323x::ic::DS3231,
+    > = Ds323x::new_ds3231(i2c);
+    let rtc = RTC(ds3231);
 
     // init buttons
     let button_one: Input<'_, PIN_2> = Input::new(p.PIN_2, Pull::Up);
@@ -61,7 +66,13 @@ fn main() -> ! {
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {
         spawner
-            .spawn(main_core(spawner, button_one, button_two, button_three))
+            .spawn(main_core(
+                spawner,
+                button_one,
+                button_two,
+                button_three,
+                rtc,
+            ))
             .unwrap();
     });
 }
@@ -72,6 +83,7 @@ async fn main_core(
     button_one: Input<'static, PIN_2>,
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
+    rtc: RTC<'static>,
 ) {
     spawner
         .spawn(display::display_matrix::process_text_buffer())
@@ -83,9 +95,9 @@ async fn main_core(
         .spawn(buttons::button_three_task(button_three))
         .unwrap();
 
-    let clock_app = ClockApp { name: "Clock" };
-    let pomodoro_app = PomodoroApp { name: "Pomodoro" };
-    let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app);
+    let clock_app = ClockApp::new("Clock");
+    let pomodoro_app = PomodoroApp::new("Pomodoro");
+    let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app, rtc);
     app_controller.run_forever().await;
 }
 

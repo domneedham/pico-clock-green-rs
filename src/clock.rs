@@ -12,11 +12,15 @@ use crate::{
 static PUB_SUB_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
     PubSubChannel::new();
 
-#[derive(PartialEq)]
 pub struct ClockApp<'a> {
-    pub name: &'a str,
+    name: &'a str,
 }
 
+impl<'a> ClockApp<'a> {
+    pub fn new(name: &'a str) -> Self {
+        Self { name }
+    }
+}
 impl<'a> App<'a> for ClockApp<'a> {
     fn get_name(&self) -> &'a str {
         self.name
