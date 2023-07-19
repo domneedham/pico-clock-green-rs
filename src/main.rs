@@ -23,7 +23,7 @@ use embassy_rp::{
     peripherals::*,
 };
 use pomodoro::PomodoroApp;
-use rtc::{Ds3231, RTC};
+use rtc::Ds3231;
 use {defmt as _, defmt_rtt as _, panic_probe as _};
 
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
@@ -36,11 +36,11 @@ fn main() -> ! {
 
     // init rtc
     let i2c = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6, Config::default());
-    let ds3231: Ds323x<
+    let ds323x: Ds323x<
         ds323x::interface::I2cInterface<i2c::I2c<'_, I2C1, i2c::Blocking>>,
         ds323x::ic::DS3231,
     > = Ds323x::new_ds3231(i2c);
-    let rtc = Ds3231(ds3231);
+    let ds3231 = Ds3231(ds323x);
 
     // init buttons
     let button_one: Input<'_, PIN_2> = Input::new(p.PIN_2, Pull::Up);
@@ -68,7 +68,7 @@ fn main() -> ! {
         spawner
             .spawn(main_core(
                 spawner,
-                rtc,
+                ds3231,
                 button_one,
                 button_two,
                 button_three,
@@ -80,12 +80,12 @@ fn main() -> ! {
 #[embassy_executor::task]
 async fn main_core(
     spawner: Spawner,
-    rtc: Ds3231<'static>,
+    ds3231: Ds3231<'static>,
     button_one: Input<'static, PIN_2>,
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
 ) {
-    RTC.lock().await.replace(Some(rtc));
+    rtc::init(ds3231).await;
 
     spawner
         .spawn(display::display_matrix::process_text_buffer())

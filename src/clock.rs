@@ -1,4 +1,4 @@
-use ds323x::{DateTimeAccess, Datelike, Timelike};
+use ds323x::{Datelike, Timelike};
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either::First, Either::Second};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, pubsub::PubSubChannel};
@@ -8,7 +8,7 @@ use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
     display::display_matrix::DISPLAY_MATRIX,
-    rtc::RTC,
+    rtc::{self},
 };
 
 static PUB_SUB_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
@@ -79,15 +79,7 @@ impl<'a> ClockApp<'a> {
 async fn clock() {
     let mut sub = PUB_SUB_CHANNEL.subscriber().unwrap();
 
-    let datetime = RTC
-        .lock()
-        .await
-        .borrow_mut()
-        .as_mut()
-        .unwrap()
-        .0
-        .datetime()
-        .unwrap();
+    let datetime = rtc::get_datetime().await;
 
     let mut last_hour = datetime.hour();
     let mut last_min = datetime.minute();
@@ -111,15 +103,7 @@ async fn clock() {
         match res {
             First(_) => break,
             Second(_) => {
-                let datetime = RTC
-                    .lock()
-                    .await
-                    .borrow_mut()
-                    .as_mut()
-                    .unwrap()
-                    .0
-                    .datetime()
-                    .unwrap();
+                let datetime = rtc::get_datetime().await;
 
                 let hour = datetime.hour();
                 let min = datetime.minute();
