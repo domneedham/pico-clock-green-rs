@@ -202,7 +202,21 @@ pub mod display_matrix {
 
         pub async fn queue_time(&self, left: u32, right: u32, show_now: bool) {
             let mut time = String::<8>::new();
-            let _ = write!(time, "{left}:{right}");
+
+            if left < 10 {
+                _ = write!(time, "0{left}");
+            } else {
+                _ = write!(time, "{left}");
+            }
+
+            _ = write!(time, ":");
+
+            if right < 10 {
+                _ = write!(time, "0{right}");
+            } else {
+                _ = write!(time, "{right}");
+            }
+
             self.queue_text(time.as_str(), show_now).await;
         }
 
