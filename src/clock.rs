@@ -1,4 +1,4 @@
-use defmt::info;
+use ds323x::{DateTimeAccess, Timelike};
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either::First, Either::Second};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, pubsub::PubSubChannel};
@@ -7,6 +7,7 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, StopAppTasks},
     display::display_matrix::DISPLAY_MATRIX,
+    rtc::RTC,
 };
 
 static PUB_SUB_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
@@ -27,7 +28,6 @@ impl<'a> App<'a> for ClockApp<'a> {
     }
 
     async fn start(&self, spawner: Spawner) {
-        DISPLAY_MATRIX.queue_text("21:21", true).await;
         spawner.spawn(clock()).unwrap();
     }
 
@@ -66,7 +66,22 @@ async fn clock() {
 
         match res {
             First(_) => break,
-            Second(_) => info!("Would update time"),
+            Second(_) => {
+                let datetime = RTC
+                    .lock()
+                    .await
+                    .borrow_mut()
+                    .as_mut()
+                    .unwrap()
+                    .0
+                    .datetime()
+                    .unwrap();
+
+                let hour = datetime.hour();
+                let min = datetime.minute();
+
+                DISPLAY_MATRIX.queue_time(hour, min, false).await;
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 use core::cell::RefCell;
+use core::fmt::Write;
 use critical_section::{CriticalSection, Mutex};
 use defmt::info;
 use embassy_rp::gpio::Output;
@@ -99,8 +100,8 @@ impl<'a> Display<'a> {
 
 pub mod display_matrix {
     use embassy_futures::select::select;
-    use embassy_futures::select::Either::{First, Second};
     use embassy_sync::signal::Signal;
+    use heapless::String;
 
     use super::*;
 
@@ -111,13 +112,7 @@ pub mod display_matrix {
 
             CANCEL_SIGNAL.reset();
 
-            let completed_future =
-                select(DISPLAY_MATRIX.show_text(item), CANCEL_SIGNAL.wait()).await;
-
-            match completed_future {
-                First(_) => info!("Completed"),
-                Second(_) => info!("Task cancelled"),
-            };
+            select(DISPLAY_MATRIX.show_text(item), CANCEL_SIGNAL.wait()).await;
         }
     }
 
@@ -172,7 +167,6 @@ pub mod display_matrix {
 
         pub async fn test_text(&self) {
             self.queue_text("HELLO WORLD", true).await;
-            self.queue_text("21:11", false).await;
         }
 
         pub async fn queue_text(&self, text: &str, show_now: bool) {
@@ -204,6 +198,12 @@ pub mod display_matrix {
             };
 
             TEXT_BUFFER.send(buf).await;
+        }
+
+        pub async fn queue_time(&self, left: u32, right: u32, show_now: bool) {
+            let mut time = String::<8>::new();
+            let _ = write!(time, "{left}:{right}");
+            self.queue_text(time.as_str(), show_now).await;
         }
 
         async fn show_text(&self, item: TextBufferItem<'_>) {

@@ -23,7 +23,7 @@ use embassy_rp::{
     peripherals::*,
 };
 use pomodoro::PomodoroApp;
-use rtc::RTC;
+use rtc::{Ds3231, RTC};
 use {defmt as _, defmt_rtt as _, panic_probe as _};
 
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
@@ -40,7 +40,7 @@ fn main() -> ! {
         ds323x::interface::I2cInterface<i2c::I2c<'_, I2C1, i2c::Blocking>>,
         ds323x::ic::DS3231,
     > = Ds323x::new_ds3231(i2c);
-    let rtc = RTC(ds3231);
+    let rtc = Ds3231(ds3231);
 
     // init buttons
     let button_one: Input<'_, PIN_2> = Input::new(p.PIN_2, Pull::Up);
@@ -68,10 +68,10 @@ fn main() -> ! {
         spawner
             .spawn(main_core(
                 spawner,
+                rtc,
                 button_one,
                 button_two,
                 button_three,
-                rtc,
             ))
             .unwrap();
     });
@@ -80,11 +80,13 @@ fn main() -> ! {
 #[embassy_executor::task]
 async fn main_core(
     spawner: Spawner,
+    rtc: Ds3231<'static>,
     button_one: Input<'static, PIN_2>,
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
-    rtc: RTC<'static>,
 ) {
+    RTC.lock().await.replace(Some(rtc));
+
     spawner
         .spawn(display::display_matrix::process_text_buffer())
         .unwrap();
@@ -97,7 +99,7 @@ async fn main_core(
 
     let clock_app = ClockApp::new("Clock");
     let pomodoro_app = PomodoroApp::new("Pomodoro");
-    let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app, rtc);
+    let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app);
     app_controller.run_forever().await;
 }
 

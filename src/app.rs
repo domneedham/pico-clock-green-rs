@@ -6,7 +6,6 @@ use crate::{
     clock::ClockApp,
     display::display_matrix::DISPLAY_MATRIX,
     pomodoro::PomodoroApp,
-    rtc::RTC,
 };
 
 #[derive(Clone)]
@@ -35,23 +34,16 @@ pub struct AppController<'a> {
     pub pomodoro_app: PomodoroApp<'a>,
     active_app: Apps,
     spawner: Spawner,
-    rtc: RTC<'a>,
 }
 
 impl<'a> AppController<'a> {
-    pub fn new(
-        spawner: Spawner,
-        clock_app: ClockApp<'a>,
-        pomodoro_app: PomodoroApp<'a>,
-        rtc: RTC<'a>,
-    ) -> Self {
+    pub fn new(spawner: Spawner, clock_app: ClockApp<'a>, pomodoro_app: PomodoroApp<'a>) -> Self {
         Self {
             showing_app_picker: false,
             clock_app,
             pomodoro_app,
             active_app: Apps::ClockAppOption,
             spawner,
-            rtc,
         }
     }
 
