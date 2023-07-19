@@ -6,6 +6,7 @@ use embassy_time::{Duration, Timer};
 
 use crate::{
     app::{App, StopAppTasks},
+    buttons::ButtonPress,
     display::display_matrix::DISPLAY_MATRIX,
     rtc::RTC,
 };
@@ -22,35 +23,55 @@ impl<'a> ClockApp<'a> {
         Self { name }
     }
 }
+
 impl<'a> App<'a> for ClockApp<'a> {
     fn get_name(&self) -> &'a str {
         self.name
     }
 
     async fn start(&self, spawner: Spawner) {
-        spawner.spawn(clock()).unwrap();
+        self.start_clock(spawner).await;
     }
 
     async fn stop(&self) {
-        PUB_SUB_CHANNEL
-            .immediate_publisher()
-            .publish_immediate(StopAppTasks());
+        self.cancel_clock();
     }
 
-    async fn button_one_short_press(&self) {
-        DISPLAY_MATRIX.test_text().await;
+    async fn button_one_short_press(&self, spawner: Spawner) {
+        self.cancel_clock();
+        DISPLAY_MATRIX.queue_text("CLOCK INTERRUPT", true).await;
+        self.start_clock(spawner).await;
     }
 
-    async fn button_two_press(&self, _: crate::buttons::ButtonPress) {
+    async fn button_two_press(&self, _: ButtonPress, _: Spawner) {
         critical_section::with(|cs| {
             DISPLAY_MATRIX.clear_all(cs, true);
         });
     }
 
-    async fn button_three_press(&self, _: crate::buttons::ButtonPress) {
+    async fn button_three_press(&self, _: ButtonPress, _: Spawner) {
         critical_section::with(|cs| {
             DISPLAY_MATRIX.fill_all(cs, true);
         });
+    }
+}
+
+impl<'a> ClockApp<'a> {
+    async fn start_clock(&self, spawner: Spawner) {
+        // try to start the clock, but wait if the spawner is busy and retry
+        loop {
+            let res = spawner.spawn(clock());
+            match res {
+                Ok(_) => break,
+                Err(_) => Timer::after(Duration::from_millis(100)).await,
+            }
+        }
+    }
+
+    fn cancel_clock(&self) {
+        PUB_SUB_CHANNEL
+            .immediate_publisher()
+            .publish_immediate(StopAppTasks());
     }
 }
 

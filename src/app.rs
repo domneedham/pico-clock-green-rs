@@ -17,9 +17,9 @@ pub trait App<'a> {
     async fn start(&self, spawner: Spawner);
     async fn stop(&self);
 
-    async fn button_one_short_press(&self);
-    async fn button_two_press(&self, press: ButtonPress);
-    async fn button_three_press(&self, press: ButtonPress);
+    async fn button_one_short_press(&self, spawner: Spawner);
+    async fn button_two_press(&self, press: ButtonPress, spawner: Spawner);
+    async fn button_three_press(&self, press: ButtonPress, spawner: Spawner);
 }
 
 #[derive(PartialEq)]
@@ -73,8 +73,12 @@ impl<'a> AppController<'a> {
                     self.app_selected().await;
                 } else {
                     match self.active_app {
-                        Apps::ClockAppOption => self.clock_app.button_one_short_press().await,
-                        Apps::PomodoroAppOption => self.pomodoro_app.button_one_short_press().await,
+                        Apps::ClockAppOption => {
+                            self.clock_app.button_one_short_press(self.spawner).await
+                        }
+                        Apps::PomodoroAppOption => {
+                            self.pomodoro_app.button_one_short_press(self.spawner).await
+                        }
                     }
                 }
             }
@@ -89,8 +93,12 @@ impl<'a> AppController<'a> {
         }
 
         match self.active_app {
-            Apps::ClockAppOption => self.clock_app.button_two_press(press).await,
-            Apps::PomodoroAppOption => self.pomodoro_app.button_two_press(press).await,
+            Apps::ClockAppOption => self.clock_app.button_two_press(press, self.spawner).await,
+            Apps::PomodoroAppOption => {
+                self.pomodoro_app
+                    .button_two_press(press, self.spawner)
+                    .await
+            }
         };
     }
 
@@ -101,8 +109,12 @@ impl<'a> AppController<'a> {
         }
 
         match self.active_app {
-            Apps::ClockAppOption => self.clock_app.button_three_press(press).await,
-            Apps::PomodoroAppOption => self.pomodoro_app.button_three_press(press).await,
+            Apps::ClockAppOption => self.clock_app.button_three_press(press, self.spawner).await,
+            Apps::PomodoroAppOption => {
+                self.pomodoro_app
+                    .button_three_press(press, self.spawner)
+                    .await
+            }
         };
     }
 

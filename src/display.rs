@@ -166,10 +166,6 @@ pub mod display_matrix {
             }
         }
 
-        pub async fn test_text(&self) {
-            self.queue_text("HELLO WORLD", true).await;
-        }
-
         pub async fn queue_text(&self, text: &str, show_now: bool) {
             if show_now {
                 Self::cancel_and_remove_queue()
@@ -281,13 +277,6 @@ pub mod display_matrix {
             }
 
             pos
-        }
-
-        pub fn test_icons(&self) {
-            self.show_icon("AutoLight");
-            self.show_icon("Tue");
-            self.hide_icon("Tue");
-            self.show_icon("Mon");
         }
 
         pub fn show_icon(&self, icon_text: &str) {
