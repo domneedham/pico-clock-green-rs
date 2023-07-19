@@ -1,4 +1,4 @@
-use ds323x::{DateTimeAccess, Timelike};
+use ds323x::{DateTimeAccess, Datelike, Timelike};
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either::First, Either::Second};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, pubsub::PubSubChannel};
@@ -79,8 +79,10 @@ async fn clock() {
 
                 let hour = datetime.hour();
                 let min = datetime.minute();
-
                 DISPLAY_MATRIX.queue_time(hour, min, false).await;
+
+                let day = datetime.weekday();
+                DISPLAY_MATRIX.show_day_icon(day);
             }
         }
     }

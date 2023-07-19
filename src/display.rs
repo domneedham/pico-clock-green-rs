@@ -99,6 +99,7 @@ impl<'a> Display<'a> {
 }
 
 pub mod display_matrix {
+    use chrono::Weekday;
     use embassy_futures::select::select;
     use embassy_sync::signal::Signal;
     use heapless::String;
@@ -315,6 +316,39 @@ pub mod display_matrix {
                 }
                 None => info!("Icon {} not found", icon_text),
             }
+        }
+
+        pub fn show_day_icon(&self, day: Weekday) {
+            critical_section::with(|cs| match day {
+                Weekday::Mon => {
+                    self.hide_icon(cs, "Sun");
+                    self.show_icon(cs, "Mon");
+                }
+                Weekday::Tue => {
+                    self.hide_icon(cs, "Mon");
+                    self.show_icon(cs, "Tue");
+                }
+                Weekday::Wed => {
+                    self.hide_icon(cs, "Tue");
+                    self.show_icon(cs, "Wed");
+                }
+                Weekday::Thu => {
+                    self.hide_icon(cs, "Wed");
+                    self.show_icon(cs, "Thur");
+                }
+                Weekday::Fri => {
+                    self.hide_icon(cs, "Thur");
+                    self.show_icon(cs, "Fri");
+                }
+                Weekday::Sat => {
+                    self.hide_icon(cs, "Fri");
+                    self.show_icon(cs, "Sat");
+                }
+                Weekday::Sun => {
+                    self.hide_icon(cs, "Sat");
+                    self.show_icon(cs, "Sun");
+                }
+            })
         }
 
         fn shift_text_left(&self, add_space: bool) {
