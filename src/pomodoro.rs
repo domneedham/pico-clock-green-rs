@@ -27,10 +27,7 @@ impl<'a> App<'a> for PomodoroApp<'a> {
 
     async fn button_one_short_press(&self) {
         DISPLAY_MATRIX.test_text().await;
-
-        critical_section::with(|cs| {
-            DISPLAY_MATRIX.test_icons(cs);
-        });
+        DISPLAY_MATRIX.test_icons();
     }
 
     async fn button_two_press(&self, _: crate::buttons::ButtonPress) {

@@ -283,72 +283,76 @@ pub mod display_matrix {
             pos
         }
 
-        pub fn test_icons(&self, cs: CriticalSection) {
-            self.show_icon(cs, "AutoLight");
-            self.show_icon(cs, "Tue");
-            self.hide_icon(cs, "Tue");
-            self.show_icon(cs, "Mon");
+        pub fn test_icons(&self) {
+            self.show_icon("AutoLight");
+            self.show_icon("Tue");
+            self.hide_icon("Tue");
+            self.show_icon("Mon");
         }
 
-        pub fn show_icon(&self, cs: CriticalSection, icon_text: &str) {
-            let mut matrix = self.0.borrow_ref_mut(cs);
+        pub fn show_icon(&self, icon_text: &str) {
+            critical_section::with(|cs| {
+                let mut matrix = self.0.borrow_ref_mut(cs);
 
-            let icon: Option<&Icon> = get_icon_struct(icon_text);
-            match icon {
-                Some(i) => {
-                    for w in 0..i.width {
-                        matrix[i.y][i.x + w] = 1;
+                let icon: Option<&Icon> = get_icon_struct(icon_text);
+                match icon {
+                    Some(i) => {
+                        for w in 0..i.width {
+                            matrix[i.y][i.x + w] = 1;
+                        }
                     }
+                    None => info!("Icon {} not found", icon_text),
                 }
-                None => info!("Icon {} not found", icon_text),
-            }
+            })
         }
 
-        pub fn hide_icon(&self, cs: CriticalSection, icon_text: &str) {
-            let mut matrix = self.0.borrow_ref_mut(cs);
+        pub fn hide_icon(&self, icon_text: &str) {
+            critical_section::with(|cs| {
+                let mut matrix = self.0.borrow_ref_mut(cs);
 
-            let icon: Option<&Icon> = get_icon_struct(icon_text);
-            match icon {
-                Some(i) => {
-                    for w in 0..i.width {
-                        matrix[i.y][i.x + w] = 0;
+                let icon: Option<&Icon> = get_icon_struct(icon_text);
+                match icon {
+                    Some(i) => {
+                        for w in 0..i.width {
+                            matrix[i.y][i.x + w] = 0;
+                        }
                     }
+                    None => info!("Icon {} not found", icon_text),
                 }
-                None => info!("Icon {} not found", icon_text),
-            }
+            })
         }
 
         pub fn show_day_icon(&self, day: Weekday) {
-            critical_section::with(|cs| match day {
+            match day {
                 Weekday::Mon => {
-                    self.hide_icon(cs, "Sun");
-                    self.show_icon(cs, "Mon");
+                    self.hide_icon("Sun");
+                    self.show_icon("Mon");
                 }
                 Weekday::Tue => {
-                    self.hide_icon(cs, "Mon");
-                    self.show_icon(cs, "Tue");
+                    self.hide_icon("Mon");
+                    self.show_icon("Tue");
                 }
                 Weekday::Wed => {
-                    self.hide_icon(cs, "Tue");
-                    self.show_icon(cs, "Wed");
+                    self.hide_icon("Tue");
+                    self.show_icon("Wed");
                 }
                 Weekday::Thu => {
-                    self.hide_icon(cs, "Wed");
-                    self.show_icon(cs, "Thur");
+                    self.hide_icon("Wed");
+                    self.show_icon("Thur");
                 }
                 Weekday::Fri => {
-                    self.hide_icon(cs, "Thur");
-                    self.show_icon(cs, "Fri");
+                    self.hide_icon("Thur");
+                    self.show_icon("Fri");
                 }
                 Weekday::Sat => {
-                    self.hide_icon(cs, "Fri");
-                    self.show_icon(cs, "Sat");
+                    self.hide_icon("Fri");
+                    self.show_icon("Sat");
                 }
                 Weekday::Sun => {
-                    self.hide_icon(cs, "Sat");
-                    self.show_icon(cs, "Sun");
+                    self.hide_icon("Sat");
+                    self.show_icon("Sun");
                 }
-            })
+            }
         }
 
         fn shift_text_left(&self, add_space: bool) {
