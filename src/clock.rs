@@ -29,27 +29,27 @@ impl<'a> App<'a> for ClockApp<'a> {
         self.name
     }
 
-    async fn start(&self, spawner: Spawner) {
+    async fn start(&mut self, spawner: Spawner) {
         self.start_clock(spawner).await;
     }
 
-    async fn stop(&self) {
+    async fn stop(&mut self) {
         self.cancel_clock();
     }
 
-    async fn button_one_short_press(&self, spawner: Spawner) {
+    async fn button_one_short_press(&mut self, spawner: Spawner) {
         self.cancel_clock();
         DISPLAY_MATRIX.queue_text("CLOCK INTERRUPT", true).await;
         self.start_clock(spawner).await;
     }
 
-    async fn button_two_press(&self, _: ButtonPress, _: Spawner) {
+    async fn button_two_press(&mut self, _: ButtonPress, _: Spawner) {
         critical_section::with(|cs| {
             DISPLAY_MATRIX.clear_all(cs, true);
         });
     }
 
-    async fn button_three_press(&self, _: ButtonPress, _: Spawner) {
+    async fn button_three_press(&mut self, _: ButtonPress, _: Spawner) {
         critical_section::with(|cs| {
             DISPLAY_MATRIX.fill_all(cs, true);
         });

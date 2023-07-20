@@ -15,12 +15,12 @@ pub struct StopAppTasks();
 pub trait App<'a> {
     fn get_name(&self) -> &'a str;
 
-    async fn start(&self, spawner: Spawner);
-    async fn stop(&self);
+    async fn start(&mut self, spawner: Spawner);
+    async fn stop(&mut self);
 
-    async fn button_one_short_press(&self, spawner: Spawner);
-    async fn button_two_press(&self, press: ButtonPress, spawner: Spawner);
-    async fn button_three_press(&self, press: ButtonPress, spawner: Spawner);
+    async fn button_one_short_press(&mut self, spawner: Spawner);
+    async fn button_two_press(&mut self, press: ButtonPress, spawner: Spawner);
+    async fn button_three_press(&mut self, press: ButtonPress, spawner: Spawner);
 }
 
 #[derive(PartialEq)]

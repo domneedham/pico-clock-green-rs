@@ -17,25 +17,25 @@ impl<'a> App<'a> for PomodoroApp<'a> {
         self.name
     }
 
-    async fn start(&self, _: Spawner) {
+    async fn start(&mut self, _: Spawner) {
         DISPLAY_MATRIX.queue_text("POMO", true).await;
     }
 
-    async fn stop(&self) {
+    async fn stop(&mut self) {
         // do nothing yet.
     }
 
-    async fn button_one_short_press(&self, _: Spawner) {
+    async fn button_one_short_press(&mut self, _: Spawner) {
         DISPLAY_MATRIX.queue_text("POMO INTERRUPT", true).await;
     }
 
-    async fn button_two_press(&self, _: ButtonPress, _: Spawner) {
+    async fn button_two_press(&mut self, _: ButtonPress, _: Spawner) {
         critical_section::with(|cs| {
             DISPLAY_MATRIX.clear_all(cs, true);
         });
     }
 
-    async fn button_three_press(&self, _: ButtonPress, _: Spawner) {
+    async fn button_three_press(&mut self, _: ButtonPress, _: Spawner) {
         critical_section::with(|cs| {
             DISPLAY_MATRIX.fill_all(cs, true);
         });
