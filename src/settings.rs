@@ -193,11 +193,13 @@ mod configurations {
 
     pub struct DayConfiguration {
         day: u32,
+        month: u32,
     }
 
     impl Configuration for DayConfiguration {
         async fn start(&mut self) {
             self.day = rtc::get_day().await;
+            self.month = rtc::get_month().await;
             self.show().await;
         }
 
@@ -206,7 +208,13 @@ mod configurations {
         }
 
         async fn button_two_press(&mut self, _: ButtonPress) {
-            if self.day == 59 {
+            let x = Self::MONTH_TABLE
+                .iter()
+                .find(|y: &&(u32, u32)| y.0 == self.month)
+                .unwrap()
+                .1;
+
+            if self.day == x {
                 self.day = 0;
             } else {
                 self.day += 1;
@@ -215,8 +223,14 @@ mod configurations {
         }
 
         async fn button_three_press(&mut self, _: ButtonPress) {
+            let x = Self::MONTH_TABLE
+                .iter()
+                .find(|y: &&(u32, u32)| y.0 == self.month)
+                .unwrap()
+                .1;
+
             if self.day == 0 {
-                self.day = 59;
+                self.day = x;
             } else {
                 self.day -= 1;
             }
@@ -225,13 +239,27 @@ mod configurations {
     }
 
     impl DayConfiguration {
+        const MONTH_TABLE: [(u32, u32); 12] = [
+            (1, 31),
+            (2, 29),
+            (3, 31),
+            (4, 30),
+            (5, 31),
+            (6, 30),
+            (7, 31),
+            (8, 31),
+            (9, 30),
+            (10, 31),
+            (11, 30),
+            (12, 31),
+        ];
+
         pub fn new() -> Self {
-            Self { day: 0 }
+            Self { day: 0, month: 0 }
         }
 
         async fn show(&self) {
-            let month = rtc::get_month().await;
-            DISPLAY_MATRIX.queue_date(self.day, month, true).await;
+            DISPLAY_MATRIX.queue_date(self.day, self.month, true).await;
         }
     }
 }
