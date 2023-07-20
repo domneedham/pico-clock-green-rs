@@ -217,6 +217,26 @@ pub mod display_matrix {
             self.queue_text(time.as_str(), show_now).await;
         }
 
+        pub async fn queue_date(&self, left: u32, right: u32, show_now: bool) {
+            let mut date = String::<8>::new();
+
+            if left < 10 {
+                _ = write!(date, "0{left}");
+            } else {
+                _ = write!(date, "{left}");
+            }
+
+            _ = write!(date, "/");
+
+            if right < 10 {
+                _ = write!(date, "0{right}");
+            } else {
+                _ = write!(date, "{right}");
+            }
+
+            self.queue_text(date.as_str(), show_now).await;
+        }
+
         async fn show_text(&self, item: TextBufferItem<'_>) {
             critical_section::with(|cs| {
                 self.clear(cs, false);
