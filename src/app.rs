@@ -25,9 +25,9 @@ pub trait App<'a> {
 
 #[derive(PartialEq)]
 enum Apps {
-    ClockApp,
-    PomodoroApp,
-    SettingsApp,
+    Clock,
+    Pomodoro,
+    Settings,
 }
 
 pub struct AppController<'a> {
@@ -51,7 +51,7 @@ impl<'a> AppController<'a> {
             clock_app,
             pomodoro_app,
             settings_app,
-            active_app: Apps::ClockApp,
+            active_app: Apps::Clock,
             spawner,
         }
     }
@@ -82,11 +82,11 @@ impl<'a> AppController<'a> {
                     self.app_selected().await;
                 } else {
                     match self.active_app {
-                        Apps::ClockApp => self.clock_app.button_one_short_press(self.spawner).await,
-                        Apps::PomodoroApp => {
+                        Apps::Clock => self.clock_app.button_one_short_press(self.spawner).await,
+                        Apps::Pomodoro => {
                             self.pomodoro_app.button_one_short_press(self.spawner).await
                         }
-                        Apps::SettingsApp => {
+                        Apps::Settings => {
                             self.settings_app.button_one_short_press(self.spawner).await
                         }
                     }
@@ -103,13 +103,13 @@ impl<'a> AppController<'a> {
         }
 
         match self.active_app {
-            Apps::ClockApp => self.clock_app.button_two_press(press, self.spawner).await,
-            Apps::PomodoroApp => {
+            Apps::Clock => self.clock_app.button_two_press(press, self.spawner).await,
+            Apps::Pomodoro => {
                 self.pomodoro_app
                     .button_two_press(press, self.spawner)
                     .await
             }
-            Apps::SettingsApp => {
+            Apps::Settings => {
                 self.settings_app
                     .button_two_press(press, self.spawner)
                     .await
@@ -124,13 +124,13 @@ impl<'a> AppController<'a> {
         }
 
         match self.active_app {
-            Apps::ClockApp => self.clock_app.button_three_press(press, self.spawner).await,
-            Apps::PomodoroApp => {
+            Apps::Clock => self.clock_app.button_three_press(press, self.spawner).await,
+            Apps::Pomodoro => {
                 self.pomodoro_app
                     .button_three_press(press, self.spawner)
                     .await
             }
-            Apps::SettingsApp => {
+            Apps::Settings => {
                 self.settings_app
                     .button_three_press(press, self.spawner)
                     .await
@@ -142,9 +142,9 @@ impl<'a> AppController<'a> {
         self.showing_app_picker = true;
 
         match self.active_app {
-            Apps::ClockApp => self.clock_app.stop().await,
-            Apps::PomodoroApp => self.pomodoro_app.stop().await,
-            Apps::SettingsApp => self.settings_app.stop().await,
+            Apps::Clock => self.clock_app.stop().await,
+            Apps::Pomodoro => self.pomodoro_app.stop().await,
+            Apps::Settings => self.settings_app.stop().await,
         }
 
         self.show_next_app().await;
@@ -152,52 +152,52 @@ impl<'a> AppController<'a> {
 
     async fn show_next_app(&mut self) {
         match self.active_app {
-            Apps::ClockApp => {
+            Apps::Clock => {
                 DISPLAY_MATRIX
                     .queue_text(self.pomodoro_app.get_name(), true)
                     .await;
 
-                self.active_app = Apps::PomodoroApp;
+                self.active_app = Apps::Pomodoro;
             }
-            Apps::PomodoroApp => {
+            Apps::Pomodoro => {
                 DISPLAY_MATRIX
                     .queue_text(self.settings_app.get_name(), true)
                     .await;
 
-                self.active_app = Apps::SettingsApp;
+                self.active_app = Apps::Settings;
             }
-            Apps::SettingsApp => {
+            Apps::Settings => {
                 DISPLAY_MATRIX
                     .queue_text(self.clock_app.get_name(), true)
                     .await;
 
-                self.active_app = Apps::ClockApp;
+                self.active_app = Apps::Clock;
             }
         }
     }
 
     async fn show_previous_app(&mut self) {
         match self.active_app {
-            Apps::ClockApp => {
+            Apps::Clock => {
                 DISPLAY_MATRIX
                     .queue_text(self.settings_app.get_name(), true)
                     .await;
 
-                self.active_app = Apps::SettingsApp;
+                self.active_app = Apps::Settings;
             }
-            Apps::PomodoroApp => {
+            Apps::Pomodoro => {
                 DISPLAY_MATRIX
                     .queue_text(self.clock_app.get_name(), true)
                     .await;
 
-                self.active_app = Apps::ClockApp;
+                self.active_app = Apps::Clock;
             }
-            Apps::SettingsApp => {
+            Apps::Settings => {
                 DISPLAY_MATRIX
                     .queue_text(self.pomodoro_app.get_name(), true)
                     .await;
 
-                self.active_app = Apps::PomodoroApp;
+                self.active_app = Apps::Pomodoro;
             }
         }
     }
@@ -206,9 +206,9 @@ impl<'a> AppController<'a> {
         self.showing_app_picker = false;
 
         match self.active_app {
-            Apps::ClockApp => self.clock_app.start(self.spawner).await,
-            Apps::PomodoroApp => self.pomodoro_app.start(self.spawner).await,
-            Apps::SettingsApp => self.settings_app.start(self.spawner).await,
+            Apps::Clock => self.clock_app.start(self.spawner).await,
+            Apps::Pomodoro => self.pomodoro_app.start(self.spawner).await,
+            Apps::Settings => self.settings_app.start(self.spawner).await,
         }
     }
 }
