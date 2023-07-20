@@ -40,7 +40,21 @@ pub async fn get_minute() -> u32 {
 
 pub async fn set_hour(hour: u32) {
     let current_datetime = get_datetime().await;
-    let new_datetime = current_datetime.with_hour(hour).unwrap();
+    let new_datetime = current_datetime
+        .with_hour(hour)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
+    set_datetime(&new_datetime).await;
+}
+
+pub async fn set_minute(minute: u32) {
+    let current_datetime = get_datetime().await;
+    let new_datetime = current_datetime
+        .with_minute(minute)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
     set_datetime(&new_datetime).await;
 }
 

@@ -2,7 +2,7 @@ use embassy_executor::Spawner;
 
 use crate::{app::App, buttons::ButtonPress, display::display_matrix::DISPLAY_MATRIX};
 
-use self::configurations::{Configuration, HourConfiguration};
+use self::configurations::{Configuration, HourConfiguration, MinuteConfiguration};
 
 enum SettingsConfig {
     Hour,
@@ -15,6 +15,7 @@ enum SettingsConfig {
 pub struct SettingsApp<'a> {
     name: &'a str,
     hour_config: configurations::HourConfiguration,
+    minute_config: configurations::MinuteConfiguration,
     active_config: SettingsConfig,
 }
 
@@ -23,6 +24,7 @@ impl<'a> SettingsApp<'a> {
         Self {
             name,
             hour_config: HourConfiguration::new(),
+            minute_config: MinuteConfiguration::new(),
             active_config: SettingsConfig::Hour,
         }
     }
@@ -49,8 +51,12 @@ impl<'a> App<'a> for SettingsApp<'a> {
             SettingsConfig::Hour => {
                 self.hour_config.save().await;
                 self.active_config = SettingsConfig::Minute;
+                self.minute_config.start().await;
             }
-            SettingsConfig::Minute => todo!(),
+            SettingsConfig::Minute => {
+                self.minute_config.save().await;
+                self.active_config = SettingsConfig::Day;
+            }
             SettingsConfig::Day => todo!(),
             SettingsConfig::Month => todo!(),
             SettingsConfig::Year => todo!(),
@@ -60,7 +66,7 @@ impl<'a> App<'a> for SettingsApp<'a> {
     async fn button_two_press(&mut self, press: ButtonPress, _: Spawner) {
         match self.active_config {
             SettingsConfig::Hour => self.hour_config.button_two_press(press).await,
-            SettingsConfig::Minute => todo!(),
+            SettingsConfig::Minute => self.minute_config.button_two_press(press).await,
             SettingsConfig::Day => todo!(),
             SettingsConfig::Month => todo!(),
             SettingsConfig::Year => todo!(),
@@ -70,7 +76,7 @@ impl<'a> App<'a> for SettingsApp<'a> {
     async fn button_three_press(&mut self, press: ButtonPress, _: Spawner) {
         match self.active_config {
             SettingsConfig::Hour => self.hour_config.button_three_press(press).await,
-            SettingsConfig::Minute => todo!(),
+            SettingsConfig::Minute => self.minute_config.button_three_press(press).await,
             SettingsConfig::Day => todo!(),
             SettingsConfig::Month => todo!(),
             SettingsConfig::Year => todo!(),
@@ -130,6 +136,50 @@ mod configurations {
         async fn show(&self) {
             let minute = rtc::get_minute().await;
             DISPLAY_MATRIX.queue_time(self.hour, minute, true).await;
+        }
+    }
+
+    pub struct MinuteConfiguration {
+        minute: u32,
+    }
+
+    impl Configuration for MinuteConfiguration {
+        async fn start(&mut self) {
+            self.minute = rtc::get_minute().await;
+            self.show().await;
+        }
+
+        async fn save(&mut self) {
+            rtc::set_minute(self.minute).await;
+        }
+
+        async fn button_two_press(&mut self, _: ButtonPress) {
+            if self.minute == 59 {
+                self.minute = 0;
+            } else {
+                self.minute += 1;
+            }
+            self.show().await;
+        }
+
+        async fn button_three_press(&mut self, _: ButtonPress) {
+            if self.minute == 0 {
+                self.minute = 59;
+            } else {
+                self.minute -= 1;
+            }
+            self.show().await;
+        }
+    }
+
+    impl MinuteConfiguration {
+        pub fn new() -> Self {
+            Self { minute: 0 }
+        }
+
+        async fn show(&self) {
+            let hour = rtc::get_hour().await;
+            DISPLAY_MATRIX.queue_time(hour, self.minute, true).await;
         }
     }
 }
