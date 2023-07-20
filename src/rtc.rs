@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Timelike};
 use core::cell::RefCell;
 use ds323x::{DateTimeAccess, Ds323x};
 use embassy_rp::{i2c, peripherals::I2C1};
@@ -26,4 +26,31 @@ pub async fn get_datetime() -> NaiveDateTime {
         .0
         .datetime()
         .unwrap()
+}
+
+pub async fn get_hour() -> u32 {
+    let datetime = get_datetime().await;
+    datetime.hour()
+}
+
+pub async fn get_minute() -> u32 {
+    let datetime = get_datetime().await;
+    datetime.minute()
+}
+
+pub async fn set_hour(hour: u32) {
+    let current_datetime = get_datetime().await;
+    let new_datetime = current_datetime.with_hour(hour).unwrap();
+    set_datetime(&new_datetime).await;
+}
+
+async fn set_datetime(datetime: &NaiveDateTime) {
+    RTC.lock()
+        .await
+        .borrow_mut()
+        .as_mut()
+        .unwrap()
+        .0
+        .set_datetime(datetime)
+        .unwrap();
 }
