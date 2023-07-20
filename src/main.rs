@@ -1,19 +1,29 @@
 #![no_std]
 #![no_main]
+#![feature(async_fn_in_trait)]
 #![feature(type_alias_impl_trait)]
 
+mod app;
+mod buttons;
+mod clock;
 mod display;
+mod pomodoro;
+mod rtc;
 
 use crate::display::{Display, DisplayPins};
 
-use display::display_matrix::DISPLAY_MATRIX;
+use app::AppController;
+use clock::ClockApp;
+use ds323x::Ds323x;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
     gpio::{Input, Level, Output, Pull},
+    i2c::{self, Config},
     multicore::Stack,
     peripherals::*,
 };
-use embassy_time::{Duration, Timer};
+use pomodoro::PomodoroApp;
+use rtc::Ds3231;
 use {defmt as _, defmt_rtt as _, panic_probe as _};
 
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
@@ -23,6 +33,14 @@ static mut CORE1_STACK: Stack<4096> = Stack::new();
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
+
+    // init rtc
+    let i2c = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6, Config::default());
+    let ds323x: Ds323x<
+        ds323x::interface::I2cInterface<i2c::I2c<'_, I2C1, i2c::Blocking>>,
+        ds323x::ic::DS3231,
+    > = Ds323x::new_ds3231(i2c);
+    let ds3231 = Ds3231(ds323x);
 
     // init buttons
     let button_one: Input<'_, PIN_2> = Input::new(p.PIN_2, Pull::Up);
@@ -48,7 +66,13 @@ fn main() -> ! {
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {
         spawner
-            .spawn(main_core(spawner, button_one, button_two, button_three))
+            .spawn(main_core(
+                spawner,
+                ds3231,
+                button_one,
+                button_two,
+                button_three,
+            ))
             .unwrap();
     });
 }
@@ -56,42 +80,30 @@ fn main() -> ! {
 #[embassy_executor::task]
 async fn main_core(
     spawner: Spawner,
+    ds3231: Ds3231<'static>,
     button_one: Input<'static, PIN_2>,
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
-) -> ! {
+) {
+    rtc::init(ds3231).await;
+
     spawner
         .spawn(display::display_matrix::process_text_buffer())
         .unwrap();
 
-    loop {
-        if button_one.is_low() {
-            DISPLAY_MATRIX.test_text().await;
+    spawner.spawn(buttons::button_one_task(button_one)).unwrap();
+    spawner.spawn(buttons::button_two_task(button_two)).unwrap();
+    spawner
+        .spawn(buttons::button_three_task(button_three))
+        .unwrap();
 
-            critical_section::with(|cs| {
-                DISPLAY_MATRIX.test_icons(cs);
-            });
-        }
-
-        if button_two.is_low() {
-            critical_section::with(|cs| {
-                DISPLAY_MATRIX.clear_all(cs, true);
-            });
-        }
-
-        if button_three.is_low() {
-            critical_section::with(|cs| {
-                DISPLAY_MATRIX.fill_all(cs, true);
-            });
-        }
-
-        Timer::after(Duration::from_millis(100)).await;
-    }
+    let clock_app = ClockApp::new("Clock");
+    let pomodoro_app = PomodoroApp::new("Pomodoro");
+    let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app);
+    app_controller.run_forever().await;
 }
 
 #[embassy_executor::task]
-async fn display_core(mut display: Display<'static>) -> ! {
-    loop {
-        display.update_display().await;
-    }
+async fn display_core(mut display: Display<'static>) {
+    display.run_forever().await;
 }

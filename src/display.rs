@@ -1,4 +1,5 @@
 use core::cell::RefCell;
+use core::fmt::Write;
 use critical_section::{CriticalSection, Mutex};
 use defmt::info;
 use embassy_rp::gpio::Output;
@@ -53,52 +54,55 @@ impl<'a> Display<'a> {
         Self { pins, row: 0 }
     }
 
-    pub async fn update_display(&mut self) {
-        self.row = (self.row + 1) % 8;
+    pub async fn run_forever(&mut self) -> ! {
+        loop {
+            self.row = (self.row + 1) % 8;
 
-        critical_section::with(|cs| {
-            for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
-                self.pins.clk.set_low();
-                if col == 1 {
-                    self.pins.sdi.set_high();
-                } else {
-                    self.pins.sdi.set_low();
+            critical_section::with(|cs| {
+                for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
+                    self.pins.clk.set_low();
+                    if col == 1 {
+                        self.pins.sdi.set_high();
+                    } else {
+                        self.pins.sdi.set_low();
+                    }
+                    self.pins.clk.set_high();
                 }
-                self.pins.clk.set_high();
+            });
+
+            self.pins.le.set_high();
+            self.pins.le.set_low();
+
+            if self.row & 0x01 != 0 {
+                self.pins.a0.set_high();
+            } else {
+                self.pins.a0.set_low();
             }
-        });
 
-        self.pins.le.set_high();
-        self.pins.le.set_low();
+            if self.row & 0x02 != 0 {
+                self.pins.a1.set_high();
+            } else {
+                self.pins.a1.set_low();
+            }
 
-        if self.row & 0x01 != 0 {
-            self.pins.a0.set_high();
-        } else {
-            self.pins.a0.set_low();
+            if self.row & 0x04 != 0 {
+                self.pins.a2.set_high();
+            } else {
+                self.pins.a2.set_low();
+            }
+
+            self.pins.oe.set_low();
+            Timer::after(Duration::from_micros(100)).await;
+            self.pins.oe.set_high();
         }
-
-        if self.row & 0x02 != 0 {
-            self.pins.a1.set_high();
-        } else {
-            self.pins.a1.set_low();
-        }
-
-        if self.row & 0x04 != 0 {
-            self.pins.a2.set_high();
-        } else {
-            self.pins.a2.set_low();
-        }
-
-        self.pins.oe.set_low();
-        Timer::after(Duration::from_micros(100)).await;
-        self.pins.oe.set_high();
     }
 }
 
 pub mod display_matrix {
+    use chrono::Weekday;
     use embassy_futures::select::select;
-    use embassy_futures::select::Either::{First, Second};
     use embassy_sync::signal::Signal;
+    use heapless::String;
 
     use super::*;
 
@@ -109,13 +113,7 @@ pub mod display_matrix {
 
             CANCEL_SIGNAL.reset();
 
-            let completed_future =
-                select(DISPLAY_MATRIX.show_text(item), CANCEL_SIGNAL.wait()).await;
-
-            match completed_future {
-                First(_) => info!("Completed"),
-                Second(_) => info!("Task cancelled"),
-            };
+            select(DISPLAY_MATRIX.show_text(item), CANCEL_SIGNAL.wait()).await;
         }
     }
 
@@ -132,7 +130,7 @@ pub mod display_matrix {
     pub struct DisplayMatrix(pub Mutex<RefCell<[[usize; 32]; 8]>>);
 
     pub static DISPLAY_MATRIX: DisplayMatrix =
-        DisplayMatrix(Mutex::new(RefCell::new([[1; 32]; 8])));
+        DisplayMatrix(Mutex::new(RefCell::new([[0; 32]; 8])));
 
     impl DisplayMatrix {
         const DISPLAY_OFFSET: usize = 2;
@@ -168,11 +166,6 @@ pub mod display_matrix {
             }
         }
 
-        pub async fn test_text(&self) {
-            self.queue_text("HELLO WORLD", true).await;
-            self.queue_text("21:11", false).await;
-        }
-
         pub async fn queue_text(&self, text: &str, show_now: bool) {
             if show_now {
                 Self::cancel_and_remove_queue()
@@ -202,6 +195,26 @@ pub mod display_matrix {
             };
 
             TEXT_BUFFER.send(buf).await;
+        }
+
+        pub async fn queue_time(&self, left: u32, right: u32, show_now: bool) {
+            let mut time = String::<8>::new();
+
+            if left < 10 {
+                _ = write!(time, "0{left}");
+            } else {
+                _ = write!(time, "{left}");
+            }
+
+            _ = write!(time, ":");
+
+            if right < 10 {
+                _ = write!(time, "0{right}");
+            } else {
+                _ = write!(time, "{right}");
+            }
+
+            self.queue_text(time.as_str(), show_now).await;
         }
 
         async fn show_text(&self, item: TextBufferItem<'_>) {
@@ -266,38 +279,68 @@ pub mod display_matrix {
             pos
         }
 
-        pub fn test_icons(&self, cs: CriticalSection) {
-            self.show_icon(cs, "AutoLight");
-            self.show_icon(cs, "Tue");
-            self.hide_icon(cs, "Tue");
-            self.show_icon(cs, "Mon");
+        pub fn show_icon(&self, icon_text: &str) {
+            critical_section::with(|cs| {
+                let mut matrix = self.0.borrow_ref_mut(cs);
+
+                let icon: Option<&Icon> = get_icon_struct(icon_text);
+                match icon {
+                    Some(i) => {
+                        for w in 0..i.width {
+                            matrix[i.y][i.x + w] = 1;
+                        }
+                    }
+                    None => info!("Icon {} not found", icon_text),
+                }
+            })
         }
 
-        pub fn show_icon(&self, cs: CriticalSection, icon_text: &str) {
-            let mut matrix = self.0.borrow_ref_mut(cs);
+        pub fn hide_icon(&self, icon_text: &str) {
+            critical_section::with(|cs| {
+                let mut matrix = self.0.borrow_ref_mut(cs);
 
-            let icon: Option<&Icon> = get_icon_struct(icon_text);
-            match icon {
-                Some(i) => {
-                    for w in 0..i.width {
-                        matrix[i.y][i.x + w] = 1;
+                let icon: Option<&Icon> = get_icon_struct(icon_text);
+                match icon {
+                    Some(i) => {
+                        for w in 0..i.width {
+                            matrix[i.y][i.x + w] = 0;
+                        }
                     }
+                    None => info!("Icon {} not found", icon_text),
                 }
-                None => info!("Icon {} not found", icon_text),
-            }
+            })
         }
 
-        pub fn hide_icon(&self, cs: CriticalSection, icon_text: &str) {
-            let mut matrix = self.0.borrow_ref_mut(cs);
-
-            let icon: Option<&Icon> = get_icon_struct(icon_text);
-            match icon {
-                Some(i) => {
-                    for w in 0..i.width {
-                        matrix[i.y][i.x + w] = 0;
-                    }
+        pub fn show_day_icon(&self, day: Weekday) {
+            match day {
+                Weekday::Mon => {
+                    self.hide_icon("Sun");
+                    self.show_icon("Mon");
                 }
-                None => info!("Icon {} not found", icon_text),
+                Weekday::Tue => {
+                    self.hide_icon("Mon");
+                    self.show_icon("Tue");
+                }
+                Weekday::Wed => {
+                    self.hide_icon("Tue");
+                    self.show_icon("Wed");
+                }
+                Weekday::Thu => {
+                    self.hide_icon("Wed");
+                    self.show_icon("Thur");
+                }
+                Weekday::Fri => {
+                    self.hide_icon("Thur");
+                    self.show_icon("Fri");
+                }
+                Weekday::Sat => {
+                    self.hide_icon("Fri");
+                    self.show_icon("Sat");
+                }
+                Weekday::Sun => {
+                    self.hide_icon("Sat");
+                    self.show_icon("Sun");
+                }
             }
         }
 
