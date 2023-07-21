@@ -6,7 +6,7 @@ use embassy_sync::{
 use embassy_time::{Duration, Timer};
 
 use crate::{
-    app::{App, StopAppTasks},
+    app::{App, ShowAppSwitcher, StopAppTasks, SHOW_APP_SWITCHER},
     buttons::ButtonPress,
     display::display_matrix::DISPLAY_MATRIX,
 };
@@ -107,6 +107,7 @@ impl<'a> App<'a> for SettingsApp<'a> {
             }
             SettingsConfig::Day => {
                 self.day_config.save().await;
+                self.end().await;
             }
         }
     }
@@ -129,6 +130,15 @@ impl<'a> App<'a> for SettingsApp<'a> {
             SettingsConfig::Month => self.month_config.button_three_press(press).await,
             SettingsConfig::Day => self.day_config.button_three_press(press).await,
         }
+    }
+}
+
+impl<'a> SettingsApp<'a> {
+    async fn end(&mut self) {
+        self.stop().await;
+        DISPLAY_MATRIX.queue_text("Done", true).await;
+        Timer::after(Duration::from_secs(2)).await;
+        SHOW_APP_SWITCHER.signal(ShowAppSwitcher());
     }
 }
 

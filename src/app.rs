@@ -1,5 +1,8 @@
 use embassy_executor::Spawner;
-use embassy_futures::select::{select3, Either3::First, Either3::Second, Either3::Third};
+use embassy_futures::select::{
+    select4, Either4::First, Either4::Fourth, Either4::Second, Either4::Third,
+};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, signal::Signal};
 
 use crate::{
     buttons::{ButtonPress, BUTTON_ONE_PRESS, BUTTON_THREE_PRESS, BUTTON_TWO_PRESS},
@@ -11,6 +14,10 @@ use crate::{
 
 #[derive(Clone)]
 pub struct StopAppTasks();
+
+pub struct ShowAppSwitcher();
+
+pub static SHOW_APP_SWITCHER: Signal<ThreadModeRawMutex, ShowAppSwitcher> = Signal::new();
 
 pub trait App<'a> {
     fn get_name(&self) -> &'a str;
@@ -60,17 +67,19 @@ impl<'a> AppController<'a> {
         self.app_selected().await;
 
         loop {
-            let button_press = select3(
+            let t = select4(
+                SHOW_APP_SWITCHER.wait(),
                 BUTTON_ONE_PRESS.wait(),
                 BUTTON_TWO_PRESS.wait(),
                 BUTTON_THREE_PRESS.wait(),
             )
             .await;
 
-            match button_press {
-                First(press) => self.button_one_press(press).await,
-                Second(press) => self.button_two_press(press).await,
-                Third(press) => self.button_three_press(press).await,
+            match t {
+                First(_) => self.show_app_picker().await,
+                Second(press) => self.button_one_press(press).await,
+                Third(press) => self.button_two_press(press).await,
+                Fourth(press) => self.button_three_press(press).await,
             }
         }
     }
