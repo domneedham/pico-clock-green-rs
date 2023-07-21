@@ -74,6 +74,12 @@ pub async fn set_day(day: u32) {
     set_datetime(&new_datetime).await;
 }
 
+pub async fn set_month(month: u32) {
+    let current_datetime = get_datetime().await;
+    let new_datetime = current_datetime.with_month(month).unwrap();
+    set_datetime(&new_datetime).await;
+}
+
 async fn set_datetime(datetime: &NaiveDateTime) {
     RTC.lock()
         .await
