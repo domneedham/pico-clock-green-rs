@@ -55,11 +55,11 @@ pub async fn get_year() -> i32 {
 
 pub async fn is_leap_year() -> bool {
     let year = get_year().await;
-    year % 4 == 0 && (year % 100 != 0 || (year % 100 == 0 && year % 400 == 0))
+    (year % 400 == 0 || year % 100 != 0) && year % 4 == 0
 }
 
 pub fn is_leap_year_opt(year: i32) -> bool {
-    year % 4 == 0 && (year % 100 != 0 || (year % 100 == 0 && year % 400 == 0))
+    (year % 400 == 0 || year % 100 != 0) && year % 4 == 0
 }
 
 pub async fn set_hour(hour: u32) {
@@ -113,12 +113,8 @@ pub async fn set_year(year: i32) {
     let mut current_datetime = get_datetime().await;
 
     // check for undoing leap year if year becomes not leap year
-    if !is_leap_year_opt(year) {
-        if current_datetime.month() == 2 {
-            if current_datetime.day() == 29 {
-                current_datetime = current_datetime.with_day(28).unwrap();
-            }
-        }
+    if !is_leap_year_opt(year) && current_datetime.month() == 2 && current_datetime.day() == 29 {
+        current_datetime = current_datetime.with_day(28).unwrap();
     }
 
     let new_datetime = current_datetime.with_year(year).unwrap();
@@ -144,10 +140,8 @@ pub async fn get_max_day_in_month(month: u32) -> u32 {
         .1;
 
     // handle leap year in feb
-    if month == 2 {
-        if is_leap_year().await {
-            day += 1;
-        }
+    if month == 2 && is_leap_year().await {
+        day += 1;
     }
 
     day
