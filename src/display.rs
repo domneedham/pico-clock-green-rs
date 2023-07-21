@@ -217,6 +217,14 @@ pub mod display_matrix {
             self.queue_text(time.as_str(), show_now).await;
         }
 
+        pub async fn queue_year(&self, year: i32, show_now: bool) {
+            let mut text: String<8> = String::<8>::new();
+
+            _ = write!(text, "{year}");
+
+            self.queue_text(text.as_str(), show_now).await;
+        }
+
         pub async fn queue_date(&self, left: u32, right: u32, show_now: bool) {
             let mut date = String::<8>::new();
 

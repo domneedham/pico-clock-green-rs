@@ -4,20 +4,22 @@ use crate::{app::App, buttons::ButtonPress, display::display_matrix::DISPLAY_MAT
 
 use self::configurations::{
     Configuration, DayConfiguration, HourConfiguration, MinuteConfiguration, MonthConfiguration,
+    YearConfiguration,
 };
 
 enum SettingsConfig {
     Hour,
     Minute,
+    Year,
     Month,
     Day,
-    Year,
 }
 
 pub struct SettingsApp<'a> {
     name: &'a str,
     hour_config: configurations::HourConfiguration,
     minute_config: configurations::MinuteConfiguration,
+    year_config: configurations::YearConfiguration,
     month_config: configurations::MonthConfiguration,
     day_config: configurations::DayConfiguration,
     active_config: SettingsConfig,
@@ -29,6 +31,7 @@ impl<'a> SettingsApp<'a> {
             name,
             hour_config: HourConfiguration::new(),
             minute_config: MinuteConfiguration::new(),
+            year_config: YearConfiguration::new(),
             month_config: MonthConfiguration::new(),
             day_config: DayConfiguration::new(),
             active_config: SettingsConfig::Hour,
@@ -61,6 +64,11 @@ impl<'a> App<'a> for SettingsApp<'a> {
             }
             SettingsConfig::Minute => {
                 self.minute_config.save().await;
+                self.active_config = SettingsConfig::Year;
+                self.year_config.start().await;
+            }
+            SettingsConfig::Year => {
+                self.year_config.save().await;
                 self.active_config = SettingsConfig::Month;
                 self.month_config.start().await;
             }
@@ -72,7 +80,6 @@ impl<'a> App<'a> for SettingsApp<'a> {
             SettingsConfig::Day => {
                 self.day_config.save().await;
             }
-            SettingsConfig::Year => todo!(),
         }
     }
 
@@ -80,9 +87,9 @@ impl<'a> App<'a> for SettingsApp<'a> {
         match self.active_config {
             SettingsConfig::Hour => self.hour_config.button_two_press(press).await,
             SettingsConfig::Minute => self.minute_config.button_two_press(press).await,
+            SettingsConfig::Year => self.year_config.button_two_press(press).await,
             SettingsConfig::Month => self.month_config.button_two_press(press).await,
             SettingsConfig::Day => self.day_config.button_two_press(press).await,
-            SettingsConfig::Year => todo!(),
         }
     }
 
@@ -90,9 +97,9 @@ impl<'a> App<'a> for SettingsApp<'a> {
         match self.active_config {
             SettingsConfig::Hour => self.hour_config.button_three_press(press).await,
             SettingsConfig::Minute => self.minute_config.button_three_press(press).await,
+            SettingsConfig::Year => self.year_config.button_three_press(press).await,
             SettingsConfig::Month => self.month_config.button_three_press(press).await,
             SettingsConfig::Day => self.day_config.button_three_press(press).await,
-            SettingsConfig::Year => todo!(),
         }
     }
 }
@@ -196,6 +203,49 @@ mod configurations {
         }
     }
 
+    pub struct YearConfiguration {
+        year: i32,
+    }
+
+    impl Configuration for YearConfiguration {
+        async fn start(&mut self) {
+            self.year = rtc::get_year().await;
+            self.show().await;
+        }
+
+        async fn save(&mut self) {
+            rtc::set_year(self.year).await;
+        }
+
+        async fn button_two_press(&mut self, _: ButtonPress) {
+            if self.year == 2100 {
+                self.year = 2000;
+            } else {
+                self.year += 1;
+            }
+            self.show().await;
+        }
+
+        async fn button_three_press(&mut self, _: ButtonPress) {
+            if self.year == 2000 {
+                self.year = 2100;
+            } else {
+                self.year -= 1;
+            }
+            self.show().await;
+        }
+    }
+
+    impl YearConfiguration {
+        pub fn new() -> Self {
+            Self { year: 0 }
+        }
+
+        async fn show(&self) {
+            DISPLAY_MATRIX.queue_year(self.year, true).await;
+        }
+    }
+
     pub struct MonthConfiguration {
         month: u32,
     }
@@ -257,13 +307,7 @@ mod configurations {
         }
 
         async fn button_two_press(&mut self, _: ButtonPress) {
-            let x = Self::MONTH_TABLE
-                .iter()
-                .find(|y: &&(u32, u32)| y.0 == self.month)
-                .unwrap()
-                .1;
-
-            if self.day == x {
+            if self.day == rtc::get_max_day_in_month(self.month).await {
                 self.day = 1;
             } else {
                 self.day += 1;
@@ -272,14 +316,8 @@ mod configurations {
         }
 
         async fn button_three_press(&mut self, _: ButtonPress) {
-            let x = Self::MONTH_TABLE
-                .iter()
-                .find(|y: &&(u32, u32)| y.0 == self.month)
-                .unwrap()
-                .1;
-
             if self.day == 1 {
-                self.day = x;
+                self.day = rtc::get_max_day_in_month(self.month).await;
             } else {
                 self.day -= 1;
             }
@@ -288,21 +326,6 @@ mod configurations {
     }
 
     impl DayConfiguration {
-        const MONTH_TABLE: [(u32, u32); 12] = [
-            (1, 31),
-            (2, 29),
-            (3, 31),
-            (4, 30),
-            (5, 31),
-            (6, 30),
-            (7, 31),
-            (8, 31),
-            (9, 30),
-            (10, 31),
-            (11, 30),
-            (12, 31),
-        ];
-
         pub fn new() -> Self {
             Self { day: 0, month: 0 }
         }
