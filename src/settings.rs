@@ -1,6 +1,15 @@
 use embassy_executor::Spawner;
+use embassy_futures::select::{select, Either::First, Either::Second};
+use embassy_sync::{
+    blocking_mutex::raw::ThreadModeRawMutex, pubsub::PubSubChannel, signal::Signal,
+};
+use embassy_time::{Duration, Timer};
 
-use crate::{app::App, buttons::ButtonPress, display::display_matrix::DISPLAY_MATRIX};
+use crate::{
+    app::{App, StopAppTasks},
+    buttons::ButtonPress,
+    display::display_matrix::DISPLAY_MATRIX,
+};
 
 use self::configurations::{
     Configuration, DayConfiguration, HourConfiguration, MinuteConfiguration, MonthConfiguration,
@@ -14,6 +23,19 @@ enum SettingsConfig {
     Month,
     Day,
 }
+
+enum BlinkTask {
+    Hour(u32, u32),
+    Minute(u32, u32),
+    Year(i32),
+    Month(u32, u32),
+    Day(u32, u32),
+}
+
+static PUB_SUB_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
+    PubSubChannel::new();
+
+static SETTINGS_DISPLAY_QUEUE: Signal<ThreadModeRawMutex, BlinkTask> = Signal::new();
 
 pub struct SettingsApp<'a> {
     name: &'a str,
@@ -44,16 +66,22 @@ impl<'a> App<'a> for SettingsApp<'a> {
         self.name
     }
 
-    async fn start(&mut self, _: Spawner) {
+    async fn start(&mut self, spawner: Spawner) {
         critical_section::with(|cs| {
             DISPLAY_MATRIX.clear_all(cs, true);
         });
 
         self.active_config = SettingsConfig::Hour;
         self.hour_config.start().await;
+
+        spawner.spawn(blink()).unwrap();
     }
 
-    async fn stop(&mut self) {}
+    async fn stop(&mut self) {
+        PUB_SUB_CHANNEL
+            .immediate_publisher()
+            .publish_immediate(StopAppTasks());
+    }
 
     async fn button_one_short_press(&mut self, _: Spawner) {
         match self.active_config {
@@ -104,8 +132,112 @@ impl<'a> App<'a> for SettingsApp<'a> {
     }
 }
 
+#[embassy_executor::task]
+async fn blink() {
+    let mut stop_task_sub = PUB_SUB_CHANNEL.subscriber().unwrap();
+    let mut blink_task = BlinkTask::Hour(0, 0);
+
+    loop {
+        if SETTINGS_DISPLAY_QUEUE.signaled() {
+            blink_task = SETTINGS_DISPLAY_QUEUE.wait().await;
+        }
+
+        match blink_task {
+            BlinkTask::Hour(hour, min) => {
+                DISPLAY_MATRIX.queue_time(hour, min, true).await;
+
+                let res = select(
+                    stop_task_sub.next_message(),
+                    Timer::after(Duration::from_millis(750)),
+                )
+                .await;
+
+                match res {
+                    First(_) => break,
+                    Second(_) => {
+                        DISPLAY_MATRIX.queue_time_left_side_blink(min, true).await;
+                        Timer::after(Duration::from_millis(300)).await;
+                    }
+                }
+            }
+            BlinkTask::Minute(hour, min) => {
+                DISPLAY_MATRIX.queue_time(hour, min, true).await;
+
+                let res = select(
+                    stop_task_sub.next_message(),
+                    Timer::after(Duration::from_millis(750)),
+                )
+                .await;
+
+                match res {
+                    First(_) => break,
+                    Second(_) => {
+                        DISPLAY_MATRIX.queue_time_right_side_blink(hour, true).await;
+                        Timer::after(Duration::from_millis(300)).await;
+                    }
+                }
+            }
+            BlinkTask::Year(year) => {
+                DISPLAY_MATRIX.queue_year(year, true).await;
+
+                let res = select(
+                    stop_task_sub.next_message(),
+                    Timer::after(Duration::from_millis(750)),
+                )
+                .await;
+
+                match res {
+                    First(_) => break,
+                    Second(_) => {
+                        DISPLAY_MATRIX.queue_text(" ", true).await;
+                        Timer::after(Duration::from_millis(300)).await;
+                    }
+                }
+            }
+            BlinkTask::Month(month, day) => {
+                DISPLAY_MATRIX.queue_date(month, day, true).await;
+
+                let res = select(
+                    stop_task_sub.next_message(),
+                    Timer::after(Duration::from_millis(750)),
+                )
+                .await;
+
+                match res {
+                    First(_) => break,
+                    Second(_) => {
+                        DISPLAY_MATRIX.queue_date_left_side_blink(day, true).await;
+                        Timer::after(Duration::from_millis(300)).await;
+                    }
+                }
+            }
+            BlinkTask::Day(month, day) => {
+                DISPLAY_MATRIX.queue_date(month, day, true).await;
+
+                let res = select(
+                    stop_task_sub.next_message(),
+                    Timer::after(Duration::from_millis(750)),
+                )
+                .await;
+
+                match res {
+                    First(_) => break,
+                    Second(_) => {
+                        DISPLAY_MATRIX
+                            .queue_date_right_side_blink(month, true)
+                            .await;
+                        Timer::after(Duration::from_millis(300)).await;
+                    }
+                }
+            }
+        }
+    }
+}
+
 mod configurations {
-    use crate::{buttons::ButtonPress, display::display_matrix::DISPLAY_MATRIX, rtc};
+    use crate::{buttons::ButtonPress, rtc};
+
+    use super::SETTINGS_DISPLAY_QUEUE;
 
     pub trait Configuration {
         async fn start(&mut self);
@@ -155,7 +287,7 @@ mod configurations {
 
         async fn show(&self) {
             let minute = rtc::get_minute().await;
-            DISPLAY_MATRIX.queue_time(self.hour, minute, true).await;
+            SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Hour(self.hour, minute));
         }
     }
 
@@ -199,7 +331,7 @@ mod configurations {
 
         async fn show(&self) {
             let hour = rtc::get_hour().await;
-            DISPLAY_MATRIX.queue_time(hour, self.minute, true).await;
+            SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Minute(hour, self.minute));
         }
     }
 
@@ -242,7 +374,7 @@ mod configurations {
         }
 
         async fn show(&self) {
-            DISPLAY_MATRIX.queue_year(self.year, true).await;
+            SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Year(self.year));
         }
     }
 
@@ -286,7 +418,7 @@ mod configurations {
 
         async fn show(&self) {
             let day = rtc::get_day().await;
-            DISPLAY_MATRIX.queue_date(self.month, day, true).await;
+            SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Month(self.month, day));
         }
     }
 
@@ -331,7 +463,7 @@ mod configurations {
         }
 
         async fn show(&self) {
-            DISPLAY_MATRIX.queue_date(self.month, self.day, true).await;
+            SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Day(self.month, self.day));
         }
     }
 }
