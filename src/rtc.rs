@@ -58,7 +58,7 @@ pub async fn is_leap_year() -> bool {
     year % 4 == 0 && (year % 100 != 0 || (year % 100 == 0 && year % 400 == 0))
 }
 
-pub fn is_leap_year_known_year(year: i32) -> bool {
+pub fn is_leap_year_opt(year: i32) -> bool {
     year % 4 == 0 && (year % 100 != 0 || (year % 100 == 0 && year % 400 == 0))
 }
 
@@ -113,7 +113,7 @@ pub async fn set_year(year: i32) {
     let mut current_datetime = get_datetime().await;
 
     // check for undoing leap year if year becomes not leap year
-    if !is_leap_year_known_year(year) {
+    if !is_leap_year_opt(year) {
         if current_datetime.month() == 2 {
             if current_datetime.day() == 29 {
                 current_datetime = current_datetime.with_day(28).unwrap();
