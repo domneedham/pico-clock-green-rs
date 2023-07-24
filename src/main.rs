@@ -9,6 +9,7 @@ mod clock;
 mod display;
 mod pomodoro;
 mod rtc;
+mod settings;
 
 use crate::display::{Display, DisplayPins};
 
@@ -24,6 +25,7 @@ use embassy_rp::{
 };
 use pomodoro::PomodoroApp;
 use rtc::Ds3231;
+use settings::SettingsApp;
 use {defmt as _, defmt_rtt as _, panic_probe as _};
 
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
@@ -99,7 +101,9 @@ async fn main_core(
 
     let clock_app = ClockApp::new("Clock");
     let pomodoro_app = PomodoroApp::new("Pomodoro");
-    let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app);
+    let settings_app = SettingsApp::new("Settings");
+
+    let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app, settings_app);
     app_controller.run_forever().await;
 }
 

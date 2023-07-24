@@ -119,7 +119,9 @@ pub mod display_matrix {
 
     struct TextBufferItem<'a> {
         text: Vec<&'a Character<'a>, 32>,
-        hold_s: u64,
+        hold_millis: u64,
+        start_position: usize,
+        end_position: usize,
     }
 
     struct DisplayClearSignal();
@@ -166,7 +168,7 @@ pub mod display_matrix {
             }
         }
 
-        pub async fn queue_text(&self, text: &str, show_now: bool) {
+        pub async fn queue_text(&self, text: &str, hold_duration_millis: u64, show_now: bool) {
             if show_now {
                 Self::cancel_and_remove_queue()
             }
@@ -191,13 +193,99 @@ pub mod display_matrix {
 
             let buf = TextBufferItem {
                 text: chars,
-                hold_s: 1,
+                hold_millis: hold_duration_millis,
+                start_position: Self::DISPLAY_OFFSET,
+                end_position: Self::LAST_INDEX,
             };
 
             TEXT_BUFFER.send(buf).await;
         }
 
-        pub async fn queue_time(&self, left: u32, right: u32, show_now: bool) {
+        pub async fn queue_text_from(
+            &self,
+            start_position: usize,
+            text: &str,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
+            if show_now {
+                Self::cancel_and_remove_queue()
+            }
+
+            let mut final_text = text;
+            if text.len() > 32 {
+                final_text = &text[0..32];
+            }
+
+            let mut chars: Vec<&Character<'_>, 32> = Vec::new();
+
+            for c in final_text.chars() {
+                let character: Option<&Character> = get_character_struct(c);
+
+                match character {
+                    Some(ch) => {
+                        chars.extend([ch]);
+                    }
+                    None => info!("Character {} not found", c),
+                }
+            }
+
+            let buf = TextBufferItem {
+                text: chars,
+                hold_millis: hold_duration_millis,
+                start_position,
+                end_position: Self::LAST_INDEX,
+            };
+
+            TEXT_BUFFER.send(buf).await;
+        }
+
+        pub async fn queue_text_to(
+            &self,
+            end_position: usize,
+            text: &str,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
+            if show_now {
+                Self::cancel_and_remove_queue()
+            }
+
+            let mut final_text = text;
+            if text.len() > 32 {
+                final_text = &text[0..32];
+            }
+
+            let mut chars: Vec<&Character<'_>, 32> = Vec::new();
+
+            for c in final_text.chars() {
+                let character: Option<&Character> = get_character_struct(c);
+
+                match character {
+                    Some(ch) => {
+                        chars.extend([ch]);
+                    }
+                    None => info!("Character {} not found", c),
+                }
+            }
+
+            let buf = TextBufferItem {
+                text: chars,
+                hold_millis: hold_duration_millis,
+                start_position: Self::DISPLAY_OFFSET,
+                end_position,
+            };
+
+            TEXT_BUFFER.send(buf).await;
+        }
+
+        pub async fn queue_time(
+            &self,
+            left: u32,
+            right: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
             let mut time = String::<8>::new();
 
             if left < 10 {
@@ -214,7 +302,124 @@ pub mod display_matrix {
                 _ = write!(time, "{right}");
             }
 
-            self.queue_text(time.as_str(), show_now).await;
+            self.queue_text(time.as_str(), hold_duration_millis, show_now)
+                .await;
+        }
+
+        pub async fn queue_time_left_side_blink(
+            &self,
+            right: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
+            let mut time = String::<8>::new();
+
+            _ = write!(time, ":");
+
+            if right < 10 {
+                _ = write!(time, "0{right}");
+            } else {
+                _ = write!(time, "{right}");
+            }
+
+            self.queue_text_from(12, time.as_str(), hold_duration_millis, show_now)
+                .await;
+        }
+
+        pub async fn queue_time_right_side_blink(
+            &self,
+            left: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
+            let mut time = String::<8>::new();
+
+            if left < 10 {
+                _ = write!(time, "0{left}");
+            } else {
+                _ = write!(time, "{left}");
+            }
+
+            _ = write!(time, ":");
+
+            self.queue_text_to(13, time.as_str(), hold_duration_millis, show_now)
+                .await;
+        }
+
+        pub async fn queue_year(&self, year: i32, hold_duration_millis: u64, show_now: bool) {
+            let mut text: String<8> = String::<8>::new();
+
+            _ = write!(text, "{year}");
+
+            self.queue_text(text.as_str(), hold_duration_millis, show_now)
+                .await;
+        }
+
+        pub async fn queue_date(
+            &self,
+            left: u32,
+            right: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
+            let mut date = String::<8>::new();
+
+            if left < 10 {
+                _ = write!(date, "0{left}");
+            } else {
+                _ = write!(date, "{left}");
+            }
+
+            _ = write!(date, "/");
+
+            if right < 10 {
+                _ = write!(date, "0{right}");
+            } else {
+                _ = write!(date, "{right}");
+            }
+
+            self.queue_text(date.as_str(), hold_duration_millis, show_now)
+                .await;
+        }
+
+        pub async fn queue_date_left_side_blink(
+            &self,
+            right: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
+            let mut time = String::<8>::new();
+
+            _ = write!(time, "/");
+
+            if right < 10 {
+                _ = write!(time, "0{right}");
+            } else {
+                _ = write!(time, "{right}");
+            }
+
+            self.queue_text_from(12, time.as_str(), hold_duration_millis, show_now)
+                .await;
+        }
+
+        pub async fn queue_date_right_side_blink(
+            &self,
+            left: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
+            let mut time = String::<8>::new();
+
+            if left < 10 {
+                _ = write!(time, "0{left}");
+            } else {
+                _ = write!(time, "{left}");
+            }
+
+            _ = write!(time, "/");
+
+            self.queue_text_to(13, time.as_str(), hold_duration_millis, show_now)
+                .await;
         }
 
         async fn show_text(&self, item: TextBufferItem<'_>) {
@@ -228,7 +433,16 @@ pub mod display_matrix {
                 total_width += c.width;
             }
 
-            let mut pos = Self::DISPLAY_OFFSET;
+            let mut pos = item.start_position;
+            let space_char = get_character_struct('_').unwrap();
+            for space in 2..pos {
+                self.show_char(space_char, space).await;
+            }
+
+            for space in item.end_position..Self::LAST_INDEX {
+                self.show_char(space_char, space).await;
+            }
+
             for c in item.text {
                 pos = self.show_char(c, pos).await;
                 pos += 2;
@@ -239,7 +453,7 @@ pub mod display_matrix {
                 }
             }
 
-            Timer::after(Duration::from_secs(item.hold_s)).await;
+            Timer::after(Duration::from_millis(item.hold_millis)).await;
         }
 
         async fn show_char(&self, character: &Character<'_>, mut pos: usize) -> usize {
@@ -387,7 +601,7 @@ mod text {
         }
     }
 
-    const CHARACTER_TABLE: [(char, Character); 42] = [
+    const CHARACTER_TABLE: [(char, Character); 43] = [
         (
             '0',
             Character::new(&4, &[0x06, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
@@ -555,6 +769,11 @@ mod text {
         (
             '/',
             Character::new(&2, &[0x02, 0x02, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01]),
+        ),
+        // empty space
+        (
+            '_',
+            Character::new(&1, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
         ),
     ];
 
