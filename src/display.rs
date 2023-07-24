@@ -119,7 +119,7 @@ pub mod display_matrix {
 
     struct TextBufferItem<'a> {
         text: Vec<&'a Character<'a>, 32>,
-        hold_s: u64,
+        hold_millis: u64,
         start_position: usize,
         end_position: usize,
     }
@@ -168,7 +168,7 @@ pub mod display_matrix {
             }
         }
 
-        pub async fn queue_text(&self, text: &str, show_now: bool) {
+        pub async fn queue_text(&self, text: &str, hold_duration_millis: u64, show_now: bool) {
             if show_now {
                 Self::cancel_and_remove_queue()
             }
@@ -193,7 +193,7 @@ pub mod display_matrix {
 
             let buf = TextBufferItem {
                 text: chars,
-                hold_s: 1,
+                hold_millis: hold_duration_millis,
                 start_position: Self::DISPLAY_OFFSET,
                 end_position: Self::LAST_INDEX,
             };
@@ -201,7 +201,13 @@ pub mod display_matrix {
             TEXT_BUFFER.send(buf).await;
         }
 
-        pub async fn queue_text_from(&self, start_position: usize, text: &str, show_now: bool) {
+        pub async fn queue_text_from(
+            &self,
+            start_position: usize,
+            text: &str,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
             if show_now {
                 Self::cancel_and_remove_queue()
             }
@@ -226,7 +232,7 @@ pub mod display_matrix {
 
             let buf = TextBufferItem {
                 text: chars,
-                hold_s: 1,
+                hold_millis: hold_duration_millis,
                 start_position,
                 end_position: Self::LAST_INDEX,
             };
@@ -234,7 +240,13 @@ pub mod display_matrix {
             TEXT_BUFFER.send(buf).await;
         }
 
-        pub async fn queue_text_to(&self, end_position: usize, text: &str, show_now: bool) {
+        pub async fn queue_text_to(
+            &self,
+            end_position: usize,
+            text: &str,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
             if show_now {
                 Self::cancel_and_remove_queue()
             }
@@ -259,7 +271,7 @@ pub mod display_matrix {
 
             let buf = TextBufferItem {
                 text: chars,
-                hold_s: 1,
+                hold_millis: hold_duration_millis,
                 start_position: Self::DISPLAY_OFFSET,
                 end_position,
             };
@@ -267,7 +279,13 @@ pub mod display_matrix {
             TEXT_BUFFER.send(buf).await;
         }
 
-        pub async fn queue_time(&self, left: u32, right: u32, show_now: bool) {
+        pub async fn queue_time(
+            &self,
+            left: u32,
+            right: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
             let mut time = String::<8>::new();
 
             if left < 10 {
@@ -284,10 +302,16 @@ pub mod display_matrix {
                 _ = write!(time, "{right}");
             }
 
-            self.queue_text(time.as_str(), show_now).await;
+            self.queue_text(time.as_str(), hold_duration_millis, show_now)
+                .await;
         }
 
-        pub async fn queue_time_left_side_blink(&self, right: u32, show_now: bool) {
+        pub async fn queue_time_left_side_blink(
+            &self,
+            right: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
             let mut time = String::<8>::new();
 
             _ = write!(time, ":");
@@ -298,10 +322,16 @@ pub mod display_matrix {
                 _ = write!(time, "{right}");
             }
 
-            self.queue_text_from(12, time.as_str(), show_now).await;
+            self.queue_text_from(12, time.as_str(), hold_duration_millis, show_now)
+                .await;
         }
 
-        pub async fn queue_time_right_side_blink(&self, left: u32, show_now: bool) {
+        pub async fn queue_time_right_side_blink(
+            &self,
+            left: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
             let mut time = String::<8>::new();
 
             if left < 10 {
@@ -312,18 +342,26 @@ pub mod display_matrix {
 
             _ = write!(time, ":");
 
-            self.queue_text_to(13, time.as_str(), show_now).await;
+            self.queue_text_to(13, time.as_str(), hold_duration_millis, show_now)
+                .await;
         }
 
-        pub async fn queue_year(&self, year: i32, show_now: bool) {
+        pub async fn queue_year(&self, year: i32, hold_duration_millis: u64, show_now: bool) {
             let mut text: String<8> = String::<8>::new();
 
             _ = write!(text, "{year}");
 
-            self.queue_text(text.as_str(), show_now).await;
+            self.queue_text(text.as_str(), hold_duration_millis, show_now)
+                .await;
         }
 
-        pub async fn queue_date(&self, left: u32, right: u32, show_now: bool) {
+        pub async fn queue_date(
+            &self,
+            left: u32,
+            right: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
             let mut date = String::<8>::new();
 
             if left < 10 {
@@ -340,10 +378,16 @@ pub mod display_matrix {
                 _ = write!(date, "{right}");
             }
 
-            self.queue_text(date.as_str(), show_now).await;
+            self.queue_text(date.as_str(), hold_duration_millis, show_now)
+                .await;
         }
 
-        pub async fn queue_date_left_side_blink(&self, right: u32, show_now: bool) {
+        pub async fn queue_date_left_side_blink(
+            &self,
+            right: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
             let mut time = String::<8>::new();
 
             _ = write!(time, "/");
@@ -354,10 +398,16 @@ pub mod display_matrix {
                 _ = write!(time, "{right}");
             }
 
-            self.queue_text_from(12, time.as_str(), show_now).await;
+            self.queue_text_from(12, time.as_str(), hold_duration_millis, show_now)
+                .await;
         }
 
-        pub async fn queue_date_right_side_blink(&self, left: u32, show_now: bool) {
+        pub async fn queue_date_right_side_blink(
+            &self,
+            left: u32,
+            hold_duration_millis: u64,
+            show_now: bool,
+        ) {
             let mut time = String::<8>::new();
 
             if left < 10 {
@@ -368,7 +418,8 @@ pub mod display_matrix {
 
             _ = write!(time, "/");
 
-            self.queue_text_to(13, time.as_str(), show_now).await;
+            self.queue_text_to(13, time.as_str(), hold_duration_millis, show_now)
+                .await;
         }
 
         async fn show_text(&self, item: TextBufferItem<'_>) {
@@ -402,7 +453,7 @@ pub mod display_matrix {
                 }
             }
 
-            Timer::after(Duration::from_secs(item.hold_s)).await;
+            Timer::after(Duration::from_millis(item.hold_millis)).await;
         }
 
         async fn show_char(&self, character: &Character<'_>, mut pos: usize) -> usize {

@@ -1,5 +1,5 @@
 use embassy_executor::Spawner;
-use embassy_futures::select::{select, Either::First, Either::Second};
+use embassy_futures::select::{select3, Either3::*};
 use embassy_sync::{
     blocking_mutex::raw::ThreadModeRawMutex, pubsub::PubSubChannel, signal::Signal,
 };
@@ -32,9 +32,12 @@ enum BlinkTask {
     Day(u32, u32),
 }
 
-static PUB_SUB_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
+struct NextSettingsStart();
+
+static STOP_APP_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
     PubSubChannel::new();
 
+static NEXT_SETTINGS_START: Signal<ThreadModeRawMutex, NextSettingsStart> = Signal::new();
 static SETTINGS_DISPLAY_QUEUE: Signal<ThreadModeRawMutex, BlinkTask> = Signal::new();
 
 pub struct SettingsApp<'a> {
@@ -78,7 +81,7 @@ impl<'a> App<'a> for SettingsApp<'a> {
     }
 
     async fn stop(&mut self) {
-        PUB_SUB_CHANNEL
+        STOP_APP_CHANNEL
             .immediate_publisher()
             .publish_immediate(StopAppTasks());
     }
@@ -110,6 +113,8 @@ impl<'a> App<'a> for SettingsApp<'a> {
                 self.end().await;
             }
         }
+
+        NEXT_SETTINGS_START.signal(NextSettingsStart());
     }
 
     async fn button_two_press(&mut self, press: ButtonPress, _: Spawner) {
@@ -136,7 +141,7 @@ impl<'a> App<'a> for SettingsApp<'a> {
 impl<'a> SettingsApp<'a> {
     async fn end(&mut self) {
         self.stop().await;
-        DISPLAY_MATRIX.queue_text("Done", true).await;
+        DISPLAY_MATRIX.queue_text("Done", 2000, true).await;
         Timer::after(Duration::from_secs(2)).await;
         SHOW_APP_SWITCHER.signal(ShowAppSwitcher());
     }
@@ -144,7 +149,7 @@ impl<'a> SettingsApp<'a> {
 
 #[embassy_executor::task]
 async fn blink() {
-    let mut stop_task_sub = PUB_SUB_CHANNEL.subscriber().unwrap();
+    let mut stop_task_sub = STOP_APP_CHANNEL.subscriber().unwrap();
     let mut blink_task = BlinkTask::Hour(0, 0);
 
     loop {
@@ -154,92 +159,46 @@ async fn blink() {
 
         match blink_task {
             BlinkTask::Hour(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, true).await;
-
-                let res = select(
-                    stop_task_sub.next_message(),
-                    Timer::after(Duration::from_millis(750)),
-                )
-                .await;
-
-                match res {
-                    First(_) => break,
-                    Second(_) => {
-                        DISPLAY_MATRIX.queue_time_left_side_blink(min, true).await;
-                        Timer::after(Duration::from_millis(300)).await;
-                    }
-                }
+                DISPLAY_MATRIX.queue_time(hour, min, 750, true).await;
+                DISPLAY_MATRIX
+                    .queue_time_left_side_blink(min, 350, false)
+                    .await;
             }
             BlinkTask::Minute(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, true).await;
-
-                let res = select(
-                    stop_task_sub.next_message(),
-                    Timer::after(Duration::from_millis(750)),
-                )
-                .await;
-
-                match res {
-                    First(_) => break,
-                    Second(_) => {
-                        DISPLAY_MATRIX.queue_time_right_side_blink(hour, true).await;
-                        Timer::after(Duration::from_millis(300)).await;
-                    }
-                }
+                DISPLAY_MATRIX.queue_time(hour, min, 750, true).await;
+                DISPLAY_MATRIX
+                    .queue_time_right_side_blink(hour, 350, false)
+                    .await;
             }
             BlinkTask::Year(year) => {
-                DISPLAY_MATRIX.queue_year(year, true).await;
-
-                let res = select(
-                    stop_task_sub.next_message(),
-                    Timer::after(Duration::from_millis(750)),
-                )
-                .await;
-
-                match res {
-                    First(_) => break,
-                    Second(_) => {
-                        DISPLAY_MATRIX.queue_text(" ", true).await;
-                        Timer::after(Duration::from_millis(300)).await;
-                    }
-                }
+                DISPLAY_MATRIX.queue_year(year, 750, true).await;
+                DISPLAY_MATRIX.queue_text(" ", 350, false).await;
             }
             BlinkTask::Month(month, day) => {
-                DISPLAY_MATRIX.queue_date(month, day, true).await;
-
-                let res = select(
-                    stop_task_sub.next_message(),
-                    Timer::after(Duration::from_millis(750)),
-                )
-                .await;
-
-                match res {
-                    First(_) => break,
-                    Second(_) => {
-                        DISPLAY_MATRIX.queue_date_left_side_blink(day, true).await;
-                        Timer::after(Duration::from_millis(300)).await;
-                    }
-                }
+                DISPLAY_MATRIX.queue_date(month, day, 750, true).await;
+                DISPLAY_MATRIX
+                    .queue_date_left_side_blink(day, 350, false)
+                    .await;
             }
             BlinkTask::Day(month, day) => {
-                DISPLAY_MATRIX.queue_date(month, day, true).await;
-
-                let res = select(
-                    stop_task_sub.next_message(),
-                    Timer::after(Duration::from_millis(750)),
-                )
-                .await;
-
-                match res {
-                    First(_) => break,
-                    Second(_) => {
-                        DISPLAY_MATRIX
-                            .queue_date_right_side_blink(month, true)
-                            .await;
-                        Timer::after(Duration::from_millis(300)).await;
-                    }
-                }
+                DISPLAY_MATRIX.queue_date(month, day, 750, true).await;
+                DISPLAY_MATRIX
+                    .queue_date_right_side_blink(month, 350, false)
+                    .await;
             }
+        }
+
+        let wait_task = select3(
+            stop_task_sub.next_message(),
+            NEXT_SETTINGS_START.wait(),
+            Timer::after(Duration::from_millis(1100)),
+        )
+        .await;
+
+        match wait_task {
+            First(_) => break,
+            Second(_) => {}
+            Third(_) => {}
         }
     }
 }

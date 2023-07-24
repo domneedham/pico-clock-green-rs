@@ -18,7 +18,7 @@ impl<'a> App<'a> for PomodoroApp<'a> {
     }
 
     async fn start(&mut self, _: Spawner) {
-        DISPLAY_MATRIX.queue_text("POMO", true).await;
+        DISPLAY_MATRIX.queue_text("POMO", 1000, true).await;
     }
 
     async fn stop(&mut self) {
@@ -26,7 +26,9 @@ impl<'a> App<'a> for PomodoroApp<'a> {
     }
 
     async fn button_one_short_press(&mut self, _: Spawner) {
-        DISPLAY_MATRIX.queue_text("POMO INTERRUPT", true).await;
+        DISPLAY_MATRIX
+            .queue_text("POMO INTERRUPT", 1000, true)
+            .await;
     }
 
     async fn button_two_press(&mut self, _: ButtonPress, _: Spawner) {

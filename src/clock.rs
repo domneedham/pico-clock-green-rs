@@ -39,7 +39,9 @@ impl<'a> App<'a> for ClockApp<'a> {
 
     async fn button_one_short_press(&mut self, spawner: Spawner) {
         self.cancel_clock();
-        DISPLAY_MATRIX.queue_text("CLOCK INTERRUPT", true).await;
+        DISPLAY_MATRIX
+            .queue_text("CLOCK INTERRUPT", 1000, true)
+            .await;
         self.start_clock(spawner).await;
     }
 
@@ -85,7 +87,9 @@ async fn clock() {
     let mut last_min = datetime.minute();
     let mut last_day = datetime.weekday();
 
-    DISPLAY_MATRIX.queue_time(last_hour, last_min, false).await;
+    DISPLAY_MATRIX
+        .queue_time(last_hour, last_min, 1000, false)
+        .await;
 
     if last_hour >= 12 {
         DISPLAY_MATRIX.hide_icon("AM");
@@ -108,7 +112,7 @@ async fn clock() {
                 let hour = datetime.hour();
                 let min = datetime.minute();
                 if hour != last_hour || min != last_min {
-                    DISPLAY_MATRIX.queue_time(hour, min, false).await;
+                    DISPLAY_MATRIX.queue_time(hour, min, 1000, false).await;
 
                     if hour >= 12 {
                         DISPLAY_MATRIX.hide_icon("AM");
