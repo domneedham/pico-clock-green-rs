@@ -12,21 +12,34 @@ use crate::{
     settings::SettingsApp,
 };
 
+/// Named struct for stopping app spawned tasks.
 #[derive(Clone)]
-pub struct StopAppTasks();
+pub struct StopAppTasks;
 
-pub struct ShowAppSwitcher();
+/// Named struct for showing the app switcher from within a task.
+pub struct ShowAppSwitcher;
 
+/// Static signal channel for when a task decides to show the app switcher.
 pub static SHOW_APP_SWITCHER: Signal<ThreadModeRawMutex, ShowAppSwitcher> = Signal::new();
 
+/// Common trait that all "Apps" should implement.
 pub trait App {
+    /// The name of the app for use in the app picker.
     fn get_name(&self) -> &str;
 
+    /// Start the app. Spawn any required async tasks.
     async fn start(&mut self, spawner: Spawner);
+
+    /// Stop the app. Save and clean up in here.
     async fn stop(&mut self);
 
+    /// Handle the top button press. This is always just a short press, as long presses are reservered by the AppController.
     async fn button_one_short_press(&mut self, spawner: Spawner);
+
+    /// Handle the middle button press. Can be a short or long press.
     async fn button_two_press(&mut self, press: ButtonPress, spawner: Spawner);
+
+    /// Handle the bottom button press. Can be a short or long press.
     async fn button_three_press(&mut self, press: ButtonPress, spawner: Spawner);
 }
 
@@ -37,16 +50,23 @@ enum Apps {
     Settings,
 }
 
+/// App controller is responsible for managing apps by:
+/// - Starting and stopping apps on user selection
+/// - Forwarding button presses to active apps
+/// - Handling the app switcher
+///
+/// It contains the main loop on the main core.
 pub struct AppController {
-    pub showing_app_picker: bool,
-    pub clock_app: ClockApp,
-    pub pomodoro_app: PomodoroApp,
-    pub settings_app: SettingsApp,
     active_app: Apps,
+    showing_app_picker: bool,
+    clock_app: ClockApp,
+    pomodoro_app: PomodoroApp,
+    settings_app: SettingsApp,
     spawner: Spawner,
 }
 
 impl AppController {
+    /// Create a new app controller. Will take ownership of all apps.
     pub fn new(
         spawner: Spawner,
         clock_app: ClockApp,
@@ -54,15 +74,16 @@ impl AppController {
         settings_app: SettingsApp,
     ) -> Self {
         Self {
+            active_app: Apps::Clock,
             showing_app_picker: false,
             clock_app,
             pomodoro_app,
             settings_app,
-            active_app: Apps::Clock,
             spawner,
         }
     }
 
+    /// The main program loop.
     pub async fn run_forever(&mut self) -> ! {
         self.app_selected().await;
 
@@ -84,6 +105,7 @@ impl AppController {
         }
     }
 
+    /// Handle the top button press when signaled from the button module.
     pub async fn button_one_press(&mut self, press: ButtonPress) {
         match press {
             ButtonPress::ShortPress => {
@@ -105,6 +127,7 @@ impl AppController {
         };
     }
 
+    /// Handle the middle button press when signaled from the button module.
     pub async fn button_two_press(&mut self, press: ButtonPress) {
         if self.showing_app_picker {
             self.show_next_app().await;
@@ -126,6 +149,7 @@ impl AppController {
         };
     }
 
+    /// Handle the bottom button press when signaled from the button module.
     pub async fn button_three_press(&mut self, press: ButtonPress) {
         if self.showing_app_picker {
             self.show_previous_app().await;
@@ -147,6 +171,7 @@ impl AppController {
         };
     }
 
+    /// Show the app picker. Must stop the active app first to allow it to clean up.
     async fn show_app_picker(&mut self) {
         self.showing_app_picker = true;
 
@@ -159,6 +184,7 @@ impl AppController {
         self.show_next_app().await;
     }
 
+    /// Show the next app text in the display.
     async fn show_next_app(&mut self) {
         match self.active_app {
             Apps::Clock => {
@@ -185,6 +211,7 @@ impl AppController {
         }
     }
 
+    /// Show the previous app text in the display.
     async fn show_previous_app(&mut self) {
         match self.active_app {
             Apps::Clock => {
@@ -211,6 +238,7 @@ impl AppController {
         }
     }
 
+    /// Dismiss the app picker and start the active app.
     async fn app_selected(&mut self) {
         self.showing_app_picker = false;
 

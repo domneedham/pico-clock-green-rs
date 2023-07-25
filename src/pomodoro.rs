@@ -78,7 +78,7 @@ impl App for PomodoroApp {
     async fn stop(&mut self) {
         STOP_APP_CHANNEL
             .immediate_publisher()
-            .publish_immediate(StopAppTasks());
+            .publish_immediate(StopAppTasks);
     }
 
     async fn button_one_short_press(&mut self, spawner: Spawner) {

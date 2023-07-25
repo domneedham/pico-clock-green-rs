@@ -32,6 +32,7 @@ static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
 static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 static mut CORE1_STACK: Stack<4096> = Stack::new();
 
+/// Entry point.
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
@@ -79,6 +80,7 @@ fn main() -> ! {
     });
 }
 
+/// Task to run on the main core.
 #[embassy_executor::task]
 async fn main_core(
     spawner: Spawner,
@@ -107,6 +109,7 @@ async fn main_core(
     app_controller.run_forever().await;
 }
 
+/// Task to run on the second core.
 #[embassy_executor::task]
 async fn display_core(mut display: Display<'static>) {
     display.run_forever().await;

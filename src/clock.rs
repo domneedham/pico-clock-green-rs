@@ -71,7 +71,7 @@ impl ClockApp {
     fn cancel_clock(&self) {
         PUB_SUB_CHANNEL
             .immediate_publisher()
-            .publish_immediate(StopAppTasks());
+            .publish_immediate(StopAppTasks);
     }
 }
 

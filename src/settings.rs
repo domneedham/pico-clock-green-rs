@@ -81,7 +81,7 @@ impl App for SettingsApp {
     async fn stop(&mut self) {
         STOP_APP_CHANNEL
             .immediate_publisher()
-            .publish_immediate(StopAppTasks());
+            .publish_immediate(StopAppTasks);
     }
 
     async fn button_one_short_press(&mut self, _: Spawner) {
@@ -141,7 +141,7 @@ impl SettingsApp {
         self.stop().await;
         DISPLAY_MATRIX.queue_text("Done", 2000, true).await;
         Timer::after(Duration::from_secs(2)).await;
-        SHOW_APP_SWITCHER.signal(ShowAppSwitcher());
+        SHOW_APP_SWITCHER.signal(ShowAppSwitcher);
     }
 }
 
