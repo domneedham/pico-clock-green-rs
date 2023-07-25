@@ -14,19 +14,17 @@ use crate::{
 static PUB_SUB_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
     PubSubChannel::new();
 
-pub struct ClockApp<'a> {
-    name: &'a str,
-}
+pub struct ClockApp {}
 
-impl<'a> ClockApp<'a> {
-    pub fn new(name: &'a str) -> Self {
-        Self { name }
+impl ClockApp {
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
-impl<'a> App<'a> for ClockApp<'a> {
-    fn get_name(&self) -> &'a str {
-        self.name
+impl App for ClockApp {
+    fn get_name(&self) -> &str {
+        "Clock"
     }
 
     async fn start(&mut self, spawner: Spawner) {
@@ -58,7 +56,7 @@ impl<'a> App<'a> for ClockApp<'a> {
     }
 }
 
-impl<'a> ClockApp<'a> {
+impl ClockApp {
     async fn start_clock(&self, spawner: Spawner) {
         // try to start the clock, but wait if the spawner is busy and retry
         loop {

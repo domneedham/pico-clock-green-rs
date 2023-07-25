@@ -19,8 +19,8 @@ pub struct ShowAppSwitcher();
 
 pub static SHOW_APP_SWITCHER: Signal<ThreadModeRawMutex, ShowAppSwitcher> = Signal::new();
 
-pub trait App<'a> {
-    fn get_name(&self) -> &'a str;
+pub trait App {
+    fn get_name(&self) -> &str;
 
     async fn start(&mut self, spawner: Spawner);
     async fn stop(&mut self);
@@ -37,21 +37,21 @@ enum Apps {
     Settings,
 }
 
-pub struct AppController<'a> {
+pub struct AppController {
     pub showing_app_picker: bool,
-    pub clock_app: ClockApp<'a>,
-    pub pomodoro_app: PomodoroApp<'a>,
-    pub settings_app: SettingsApp<'a>,
+    pub clock_app: ClockApp,
+    pub pomodoro_app: PomodoroApp,
+    pub settings_app: SettingsApp,
     active_app: Apps,
     spawner: Spawner,
 }
 
-impl<'a> AppController<'a> {
+impl AppController {
     pub fn new(
         spawner: Spawner,
-        clock_app: ClockApp<'a>,
-        pomodoro_app: PomodoroApp<'a>,
-        settings_app: SettingsApp<'a>,
+        clock_app: ClockApp,
+        pomodoro_app: PomodoroApp,
+        settings_app: SettingsApp,
     ) -> Self {
         Self {
             showing_app_picker: false,

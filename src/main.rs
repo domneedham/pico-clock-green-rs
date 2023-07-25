@@ -99,9 +99,9 @@ async fn main_core(
         .spawn(buttons::button_three_task(button_three))
         .unwrap();
 
-    let clock_app = ClockApp::new("Clock");
-    let pomodoro_app = PomodoroApp::new("Pomodoro");
-    let settings_app = SettingsApp::new("Settings");
+    let clock_app = ClockApp::new();
+    let pomodoro_app = PomodoroApp::new();
+    let settings_app = SettingsApp::new();
 
     let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app, settings_app);
     app_controller.run_forever().await;
