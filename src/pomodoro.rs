@@ -59,7 +59,7 @@ impl App for PomodoroApp {
 
     async fn start(&mut self, _: Spawner) {
         critical_section::with(|cs| {
-            DISPLAY_MATRIX.clear(cs, true);
+            DISPLAY_MATRIX.clear_all(cs, true);
         });
         show_time().await;
     }
@@ -75,8 +75,15 @@ impl App for PomodoroApp {
             RunningState::NotStarted => spawner.spawn(countdown()).unwrap(),
             RunningState::Running => {
                 // due to running delay, 1s is lost on button press, so add them back
-                let (minutes, seconds) = get_time().await;
-                set_time(minutes, seconds + 1).await;
+                let (mut minutes, mut seconds) = get_time().await;
+
+                if seconds == 59 {
+                    minutes += 1;
+                    seconds = 0;
+                } else {
+                    seconds += 1;
+                }
+                set_time(minutes, seconds).await;
                 show_time().await;
                 set_running(RunningState::Paused).await
             }
@@ -143,6 +150,12 @@ async fn set_running(running: RunningState) {
     let state = guard.borrow_mut().get_mut();
 
     state.running = running;
+
+    if let RunningState::Running = running {
+        DISPLAY_MATRIX.show_icon("CountDown");
+    } else {
+        DISPLAY_MATRIX.hide_icon("CountDown");
+    }
 }
 
 async fn show_time() {
