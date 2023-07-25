@@ -40,8 +40,7 @@ static STOP_APP_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1
 static NEXT_SETTINGS_START: Signal<ThreadModeRawMutex, NextSettingsStart> = Signal::new();
 static SETTINGS_DISPLAY_QUEUE: Signal<ThreadModeRawMutex, BlinkTask> = Signal::new();
 
-pub struct SettingsApp<'a> {
-    name: &'a str,
+pub struct SettingsApp {
     hour_config: configurations::HourConfiguration,
     minute_config: configurations::MinuteConfiguration,
     year_config: configurations::YearConfiguration,
@@ -50,10 +49,9 @@ pub struct SettingsApp<'a> {
     active_config: SettingsConfig,
 }
 
-impl<'a> SettingsApp<'a> {
-    pub fn new(name: &'a str) -> Self {
+impl SettingsApp {
+    pub fn new() -> Self {
         Self {
-            name,
             hour_config: HourConfiguration::new(),
             minute_config: MinuteConfiguration::new(),
             year_config: YearConfiguration::new(),
@@ -64,9 +62,9 @@ impl<'a> SettingsApp<'a> {
     }
 }
 
-impl<'a> App<'a> for SettingsApp<'a> {
-    fn get_name(&self) -> &'a str {
-        self.name
+impl App for SettingsApp {
+    fn get_name(&self) -> &str {
+        "Settings"
     }
 
     async fn start(&mut self, spawner: Spawner) {
@@ -138,7 +136,7 @@ impl<'a> App<'a> for SettingsApp<'a> {
     }
 }
 
-impl<'a> SettingsApp<'a> {
+impl SettingsApp {
     async fn end(&mut self) {
         self.stop().await;
         DISPLAY_MATRIX.queue_text("Done", 2000, true).await;
