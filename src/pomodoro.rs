@@ -92,34 +92,50 @@ impl App for PomodoroApp {
         }
     }
 
-    async fn button_two_press(&mut self, _: ButtonPress, _: Spawner) {
+    async fn button_two_press(&mut self, press: ButtonPress, _: Spawner) {
         if let RunningState::Running = get_running_state().await {
             return;
         }
 
-        let (mut minutes, seconds) = get_time().await;
+        let (mut minutes, mut seconds) = get_time().await;
 
-        if minutes == 60 {
-            minutes = 1;
-        } else {
-            minutes += 1;
+        match press {
+            ButtonPress::LongPress => {
+                minutes = 30;
+                seconds = 0;
+            }
+            ButtonPress::ShortPress => {
+                if minutes == 60 {
+                    minutes = 1;
+                } else {
+                    minutes += 1;
+                }
+            }
         }
 
         set_time(minutes, seconds).await;
         show_time().await;
     }
 
-    async fn button_three_press(&mut self, _: ButtonPress, _: Spawner) {
+    async fn button_three_press(&mut self, press: ButtonPress, _: Spawner) {
         if let RunningState::Running = get_running_state().await {
             return;
         }
 
-        let (mut minutes, seconds) = get_time().await;
+        let (mut minutes, mut seconds) = get_time().await;
 
-        if minutes == 1 {
-            minutes = 60;
-        } else {
-            minutes -= 1;
+        match press {
+            ButtonPress::LongPress => {
+                minutes = 30;
+                seconds = 0;
+            }
+            ButtonPress::ShortPress => {
+                if minutes == 1 {
+                    minutes = 60;
+                } else {
+                    minutes -= 1;
+                }
+            }
         }
 
         set_time(minutes, seconds).await;
