@@ -39,6 +39,12 @@ impl PomoState {
             seconds: 0,
         }
     }
+
+    pub fn reset(&mut self) {
+        self.minutes = 30;
+        self.seconds = 0;
+        self.running = RunningState::NotStarted;
+    }
 }
 
 static POMO_STATE: Mutex<ThreadModeRawMutex, RefCell<PomoState>> =
@@ -61,6 +67,11 @@ impl App for PomodoroApp {
         critical_section::with(|cs| {
             DISPLAY_MATRIX.clear_all(cs, true);
         });
+
+        if let RunningState::Finished = get_running_state().await {
+            POMO_STATE.lock().await.borrow_mut().get_mut().reset();
+        }
+
         show_time().await;
     }
 
