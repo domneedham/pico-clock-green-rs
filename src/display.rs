@@ -12,17 +12,32 @@ use self::{
     text::{get_character_struct, Character},
 };
 
+/// All the pins required for the display.
 pub struct DisplayPins<'a> {
+    /// A0 pin.
     a0: Output<'a, embassy_rp::peripherals::PIN_16>,
+
+    /// A1 pin.
     a1: Output<'a, embassy_rp::peripherals::PIN_18>,
+
+    /// A2 pin.
     a2: Output<'a, embassy_rp::peripherals::PIN_22>,
+
+    /// OE pin.
     oe: Output<'a, embassy_rp::peripherals::PIN_13>,
+
+    /// SDI pin.
     sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
+
+    /// CLK pin.
     clk: Output<'a, embassy_rp::peripherals::PIN_10>,
+
+    /// LE pin.
     le: Output<'a, embassy_rp::peripherals::PIN_12>,
 }
 
 impl<'a> DisplayPins<'a> {
+    /// Create a new display pins struct.
     pub fn new(
         a0: Output<'a, embassy_rp::peripherals::PIN_16>,
         a1: Output<'a, embassy_rp::peripherals::PIN_18>,
@@ -44,16 +59,22 @@ impl<'a> DisplayPins<'a> {
     }
 }
 
+/// Display. Sole purpose is turn on/off leds as required for showing all things in the display.
 pub struct Display<'a> {
+    /// All the pins required for the display.
     pins: DisplayPins<'a>,
+
+    /// The current row being looped through.
     row: usize,
 }
 
 impl<'a> Display<'a> {
+    /// Create a new display struct.
     pub fn new(pins: DisplayPins<'a>) -> Display {
         Self { pins, row: 0 }
     }
 
+    /// The main display loop. Will not terminate.
     pub async fn run_forever(&mut self) -> ! {
         loop {
             self.row = (self.row + 1) % 8;
@@ -98,6 +119,9 @@ impl<'a> Display<'a> {
     }
 }
 
+/// Display matrix module.
+///
+/// Contains all required data for updating state of waht to show on the display.
 pub mod display_matrix {
     use chrono::Weekday;
     use embassy_futures::select::select;
@@ -106,6 +130,9 @@ pub mod display_matrix {
 
     use super::*;
 
+    /// Process the text buffer background task.
+    ///
+    /// Waits for text buffer to be updated and then will show the text. Each showing of the text can be cancelled by signalling the cancel signal.
     #[embassy_executor::task]
     pub async fn process_text_buffer() -> ! {
         loop {
@@ -117,27 +144,52 @@ pub mod display_matrix {
         }
     }
 
+    /// Item to be added to the text buffer.
     struct TextBufferItem<'a> {
+        /// A list of upto 32 [characters](Character).
         text: Vec<&'a Character<'a>, 32>,
+
+        /// How long to hold on the dislay for in milliseconds.
+        ///
+        /// *This can be overridden by clearing the display queue so it is not a guarantee it will be on the display for this long*.
         hold_millis: u64,
+
+        /// Where to start on the display.
         start_position: usize,
+
+        /// Where to end on the display.
         end_position: usize,
     }
 
-    struct DisplayClearSignal();
+    /// Named struct for cancel signal.
+    struct DisplayClearSignal;
 
+    /// Text buffer channel. Can stored up to 16 elements in the queue.
     static TEXT_BUFFER: Channel<ThreadModeRawMutex, TextBufferItem<'_>, 16> = Channel::new();
+
+    /// Cancel signal. Will cancel the current text being shown minimum wait.
     static CANCEL_SIGNAL: Signal<ThreadModeRawMutex, DisplayClearSignal> = Signal::new();
 
+    /// Display matrix struct.
     pub struct DisplayMatrix(pub Mutex<RefCell<[[usize; 32]; 8]>>);
 
+    /// Static access to display matrix. This should be used to modify the display.
     pub static DISPLAY_MATRIX: DisplayMatrix =
         DisplayMatrix(Mutex::new(RefCell::new([[0; 32]; 8])));
 
     impl DisplayMatrix {
+        /// The first column after the icons.
         const DISPLAY_OFFSET: usize = 2;
+
+        /// The last column that can be rendered.
         const LAST_INDEX: usize = 24;
 
+        /// Clear the entire display. Includes icons.
+        ///
+        /// # Arguments
+        ///
+        /// * `cs` - The critical section to access the display matrix.
+        /// * `remove_queue` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         pub fn clear_all(&self, cs: CriticalSection, remove_queue: bool) {
             if remove_queue {
                 Self::cancel_and_remove_queue();
@@ -146,6 +198,12 @@ pub mod display_matrix {
             self.0.replace(cs, [[0; 32]; 8]);
         }
 
+        /// Fill the entire display. Includes icons.
+        ///
+        /// # Arguments
+        ///
+        /// * `cs` - The critical section to access the display matrix.
+        /// * `remove_queue` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         pub fn fill_all(&self, cs: CriticalSection, remove_queue: bool) {
             if remove_queue {
                 Self::cancel_and_remove_queue();
@@ -154,6 +212,12 @@ pub mod display_matrix {
             self.0.replace(cs, [[1; 32]; 8]);
         }
 
+        /// Clear the display. Does not include icons.
+        ///
+        /// # Arguments
+        ///
+        /// * `cs` - The critical section to access the display matrix.
+        /// * `remove_queue` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         pub fn clear(&self, cs: CriticalSection, remove_queue: bool) {
             if remove_queue {
                 Self::cancel_and_remove_queue();
@@ -168,6 +232,18 @@ pub mod display_matrix {
             }
         }
 
+        /// Queue text into the text buffer. Will append to the queue.
+        ///
+        /// Will start at the display offset.
+        /// Will end at the last index.
+        ///
+        /// Scrolling will be automatic if the text is too big to fit on the display.
+        ///
+        /// # Arguments
+        ///
+        /// * `text` - The text to show on the display.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         pub async fn queue_text(&self, text: &str, hold_duration_millis: u64, show_now: bool) {
             if show_now {
                 Self::cancel_and_remove_queue()
@@ -201,6 +277,19 @@ pub mod display_matrix {
             TEXT_BUFFER.send(buf).await;
         }
 
+        /// Queue text into the text buffer. Will append to the queue.
+        ///
+        /// Will start at the `start_position`.
+        /// Will end at the `LAST_INDEX`.
+        ///
+        /// Scrolling will be automatic if the text is too big to fit on the display.
+        ///
+        /// # Arguments
+        ///
+        /// * `start_position` - Where to start showing the text from.
+        /// * `text` - The text to show on the display.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         pub async fn queue_text_from(
             &self,
             start_position: usize,
@@ -240,6 +329,19 @@ pub mod display_matrix {
             TEXT_BUFFER.send(buf).await;
         }
 
+        /// Queue text into the text buffer. Will append to the queue.
+        ///
+        /// Will start at the `DISPLAY_OFFSET`.
+        /// Will end at the `end_position`.
+        ///
+        /// Scrolling will be automatic if the text is too big to fit on the display.
+        ///
+        /// # Arguments
+        ///
+        /// * `end_position` - Where to end showing the text.
+        /// * `text` - The text to show on the display.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         pub async fn queue_text_to(
             &self,
             end_position: usize,
@@ -279,6 +381,25 @@ pub mod display_matrix {
             TEXT_BUFFER.send(buf).await;
         }
 
+        /// Queue the time into the text buffer. Will append to the queue.
+        ///
+        /// Will automatically prepend a 0 if any number is below 10.
+        ///
+        /// Can not scroll as the maximum buffer will not be exceeded.
+        ///
+        /// # Arguments
+        ///
+        /// * `left` - What to show on the left side of the `:`.
+        /// * `right` - What to show on the right side of the `:`.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_time(10, 30, 1000, false).await; // will render as 10:30 for at least 1 second.
+        /// DISPLAY_MATRIX.queue_time(5, 5, 1000, false).await; // will render as 05:05 for at least 1 second.
+        /// ```
         pub async fn queue_time(
             &self,
             left: u32,
@@ -306,6 +427,24 @@ pub mod display_matrix {
                 .await;
         }
 
+        /// Queue the time into the text buffer. Will append to the queue.
+        ///
+        /// Will automatically prepend a 0 if any number is below 10.
+        ///
+        /// Can not scroll as the maximum buffer will not be exceeded.
+        ///
+        /// # Arguments
+        ///
+        /// * `right` - What to show on the right side of the `:`.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_time_left_side_blink(30, 1000, false).await; // will render as <>:30 for at least 1 second, where <> is empty space.
+        /// DISPLAY_MATRIX.queue_time_left_side_blink(5, 1000, false).await; // will render as <>:05 for at least 1 second, where <> is empty space.
+        /// ```
         pub async fn queue_time_left_side_blink(
             &self,
             right: u32,
@@ -326,6 +465,24 @@ pub mod display_matrix {
                 .await;
         }
 
+        /// Queue the time into the text buffer. Will append to the queue.
+        ///
+        /// Will automatically prepend a 0 if any number is below 10.
+        ///
+        /// Can not scroll as the maximum buffer will not be exceeded.
+        ///
+        /// # Arguments
+        ///
+        /// * `left` - What to show on the right side of the `:`.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_time_right_side_blink(10, 1000, false).await; // will render as 10:<> for at least 1 second, where <> is empty space.
+        /// DISPLAY_MATRIX.queue_time_right_side_blink(5, 1000, false).await; // will render as 05:<> for at least 1 second, where <> is empty space.
+        /// ```
         pub async fn queue_time_right_side_blink(
             &self,
             left: u32,
@@ -346,6 +503,21 @@ pub mod display_matrix {
                 .await;
         }
 
+        /// Queue the year into the text buffer. Will append to the queue.
+        ///
+        /// Can not scroll as the maximum buffer will not be exceeded.
+        ///
+        /// # Arguments
+        ///
+        /// * `year` - What year to show.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_year(2023, 1000, false).await; // will render as 2023 for at least 1 second.
+        /// ```
         pub async fn queue_year(&self, year: i32, hold_duration_millis: u64, show_now: bool) {
             let mut text: String<8> = String::<8>::new();
 
@@ -355,6 +527,25 @@ pub mod display_matrix {
                 .await;
         }
 
+        /// Queue the date into the text buffer. Will append to the queue.
+        ///
+        /// Will automatically prepend a 0 if any number is below 10.
+        ///
+        /// Can not scroll as the maximum buffer will not be exceeded.
+        ///
+        /// # Arguments
+        ///
+        /// * `left` - What to show on the left side of the `/`.
+        /// * `right` - What to show on the right side of the `/`.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_date(14, 12, 1000, false).await; // will render as 14:12 for at least 1 second.
+        /// DISPLAY_MATRIX.queue_date(1, 12, 1000, false).await; // will render as 01:12 for at least 1 second.
+        /// ```
         pub async fn queue_date(
             &self,
             left: u32,
@@ -382,6 +573,23 @@ pub mod display_matrix {
                 .await;
         }
 
+        /// Queue the date into the text buffer. Will append to the queue.
+        ///
+        /// Will automatically prepend a 0 if any number is below 10.
+        ///
+        /// Can not scroll as the maximum buffer will not be exceeded.
+        ///
+        /// # Arguments
+        ///
+        /// * `right` - What to show on the right side of the `/`.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_date_left_side_blink(14, 1000, false).await; // will render as <>/14 for at least 1 second, where <> is empty space.
+        /// DISPLAY_MATRIX.queue_date_left_side_blink(1, 1000, false).await; // will render as <>/01 for at least 1 second, where <> is empty space.
         pub async fn queue_date_left_side_blink(
             &self,
             right: u32,
@@ -402,6 +610,23 @@ pub mod display_matrix {
                 .await;
         }
 
+        /// Queue the date into the text buffer. Will append to the queue.
+        ///
+        /// Will automatically prepend a 0 if any number is below 10.
+        ///
+        /// Can not scroll as the maximum buffer will not be exceeded.
+        ///
+        /// # Arguments
+        ///
+        /// * `left` - What to show on the left side of the `/`.
+        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_date_right_side_blink(12, 1000, false).await; // will render as 12/<> for at least 1 second, where <> is empty space.
+        /// DISPLAY_MATRIX.queue_date_right_side_blink(1, 1000, false).await; // will render as 01/<> for at least 1 second, where <> is empty space.
         pub async fn queue_date_right_side_blink(
             &self,
             left: u32,
@@ -422,6 +647,9 @@ pub mod display_matrix {
                 .await;
         }
 
+        /// Show text on the display. It will always clear what was shown previously.
+        ///
+        /// Responsible for moving items on the display left (animation) if the position of the last item is at the end of the display.
         async fn show_text(&self, item: TextBufferItem<'_>) {
             critical_section::with(|cs| {
                 self.clear(cs, false);
@@ -456,6 +684,11 @@ pub mod display_matrix {
             Timer::after(Duration::from_millis(item.hold_millis)).await;
         }
 
+        /// Show an individual [character](Character) at the given position.
+        ///
+        /// Will move the display left (animation) if the column exceeds the `LAST_INDEX`.
+        ///
+        /// Returns the last column populated by the character.
         async fn show_char(&self, character: &Character<'_>, mut pos: usize) -> usize {
             let mut matrix = critical_section::with(|cs| *self.0.borrow_ref(cs));
 
@@ -493,6 +726,11 @@ pub mod display_matrix {
             pos
         }
 
+        /// Show an icon on the display.
+        ///
+        /// `icon_text` should be a string that can be returned from the [lookup table fn](get_character_struct).
+        ///
+        /// Will do nothing if the icon is already displayed or the icon can not be found.
         pub fn show_icon(&self, icon_text: &str) {
             critical_section::with(|cs| {
                 let mut matrix = self.0.borrow_ref_mut(cs);
@@ -501,7 +739,7 @@ pub mod display_matrix {
                 match icon {
                     Some(i) => {
                         for w in 0..i.width {
-                            matrix[i.y][i.x + w] = 1;
+                            matrix[i.col][i.row + w] = 1;
                         }
                     }
                     None => info!("Icon {} not found", icon_text),
@@ -509,6 +747,11 @@ pub mod display_matrix {
             })
         }
 
+        /// Hide an icon on the display.
+        ///
+        /// `icon_text` should be a string that can be returned from the [lookup table fn](get_character_struct).
+        ///
+        /// Will do nothing if the icon is already displayed or the icon can not be found.
         pub fn hide_icon(&self, icon_text: &str) {
             critical_section::with(|cs| {
                 let mut matrix = self.0.borrow_ref_mut(cs);
@@ -517,7 +760,7 @@ pub mod display_matrix {
                 match icon {
                     Some(i) => {
                         for w in 0..i.width {
-                            matrix[i.y][i.x + w] = 0;
+                            matrix[i.col][i.row + w] = 0;
                         }
                     }
                     None => info!("Icon {} not found", icon_text),
@@ -525,6 +768,9 @@ pub mod display_matrix {
             })
         }
 
+        /// Show a day icon, determined from `day`.
+        ///
+        /// **This is intended for use during normal function where days are incremented at 12am. It will only hide the previous day icon, not all other days.**
         pub fn show_day_icon(&self, day: Weekday) {
             match day {
                 Weekday::Mon => {
@@ -558,9 +804,11 @@ pub mod display_matrix {
             }
         }
 
+        /// Move items in the column left by one space. Will add a blank space at the end of the display if `add_space` is true.
         fn shift_text_left(&self, add_space: bool) {
             let mut matrix = critical_section::with(|cs| *self.0.borrow_ref(cs));
 
+            // skip day of week icons
             for item in matrix.iter_mut().skip(1) {
                 // start from here to account for icon width buffer
                 for col in 4..32 {
@@ -574,9 +822,11 @@ pub mod display_matrix {
             critical_section::with(|cs| self.0.replace(cs, matrix));
         }
 
+        /// Cancel the current minimum display task and clear the text buffer.
         fn cancel_and_remove_queue() {
-            CANCEL_SIGNAL.signal(DisplayClearSignal());
+            CANCEL_SIGNAL.signal(DisplayClearSignal);
 
+            // text buffer does not have clear, so create loop that runs until try_recv fails, then break
             loop {
                 let res = TEXT_BUFFER.try_recv();
                 match res {
@@ -588,19 +838,26 @@ pub mod display_matrix {
     }
 }
 
+/// Module for handling text on the display.
 mod text {
+    /// Represent text display on the display.
     #[derive(Clone)]
     pub struct Character<'a> {
+        /// The width of the character.
         pub width: &'a usize,
+
+        /// The hex representation for each row and column.
         pub values: &'a [usize],
     }
 
     impl<'a> Character<'a> {
+        /// Create a new character.
         const fn new(width: &'a usize, values: &'a [usize]) -> Self {
             Self { width, values }
         }
     }
 
+    /// All supported characters lookup table.
     const CHARACTER_TABLE: [(char, Character); 43] = [
         (
             '0',
@@ -777,6 +1034,20 @@ mod text {
         ),
     ];
 
+    /// Find the [character](Character) for the `character` param.
+    ///
+    /// Will return [None](Option::None) if the icon is not found in the [lookup table](CHARACTER_TABLE).
+    ///
+    /// # Example
+    /// ```rust
+    /// let char_text = 'A';
+    /// let ch: Option<&Character> = get_character_struct(char_text);
+    /// match ch {
+    ///     Some(c) => info!("Character {} found!", char_text),
+    ///     None => info!("Character {} not found", char_text),
+    /// }
+    /// // prints: Character A found!
+    /// ```
     pub fn get_character_struct(character: char) -> Option<&'static Character<'static>> {
         for &(c, ref info) in &CHARACTER_TABLE {
             if c == character.to_ascii_uppercase() {
@@ -787,19 +1058,32 @@ mod text {
     }
 }
 
+/// Module for handling icons on the display.
 mod icons {
+    /// Represent an icon on the display.
     pub struct Icon {
-        pub x: usize,
-        pub y: usize,
+        /// The row the icon is on.
+        pub row: usize,
+
+        /// The column the icon starts on. `width` is used to determine where it ends.
+        pub col: usize,
+
+        /// The width of the icon. This will be either 1 or 2.
         pub width: usize,
     }
 
     impl Icon {
+        /// Create a new icon representation.
         const fn new(x: usize, y: usize, width: usize) -> Icon {
-            Self { x, y, width }
+            Self {
+                row: x,
+                col: y,
+                width,
+            }
         }
     }
 
+    /// All icons lookup table.
     pub const ICON_TABLE: [(&str, Icon); 17] = [
         ("MoveOn", Icon::new(0, 0, 2)),
         ("AlarmOn", Icon::new(0, 1, 2)),
@@ -820,6 +1104,21 @@ mod icons {
         ("Sun", Icon::new(21, 0, 2)),
     ];
 
+    /// Find the [icon](Icon) for the `icon` param.
+    ///
+    /// Will return [None](Option::None) if the icon is not found in the [lookup table](ICON_TABLE).
+    ///
+    /// # Example
+    /// ```rust
+    /// let icon_text = "MoveOn";
+    /// let icon: Option<&Icon> = get_icon_struct(icon_text);
+    /// match icon {
+    ///     Some(i) => info!("Icon {} found!", icon_text),
+    ///     None => info!("Icon {} not found", icon_text),
+    /// }
+    ///
+    /// // prints: Icon MoveOn found!
+    /// ```
     pub fn get_icon_struct(icon: &str) -> Option<&Icon> {
         for &(c, ref info) in &ICON_TABLE {
             if c == icon {
