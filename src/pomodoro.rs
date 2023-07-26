@@ -21,16 +21,28 @@ static STOP_APP_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1
 /// Depict the current running state of the pomodoro timer.
 #[derive(Clone, Copy)]
 enum RunningState {
+    /// When the pomodoro app is first created or after reset. This should allow modification to the timer.
     NotStarted,
+
+    /// When the countdown is running. This should *not* allow modification to the timer.
     Running,
+
+    /// When the countdown has been paused. This should allow modification to the timer.
     Paused,
+
+    /// When the countdown has finished (reached 00:00). This should *not* allow modification to the timer, reset instead.
     Finished,
 }
 
 /// Manage active state of the pomodoro app.
 struct PomoState {
+    /// The current running state.
     running: RunningState,
+
+    /// The number of minutes to countdown from.
     minutes: u32,
+
+    /// The number of seconds. Used for display purposes and should not be set during configuration.
     seconds: u32,
 }
 
