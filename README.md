@@ -144,6 +144,10 @@ The steps are:
 
 > There are linting policies on the project. Please use `cargo clippy` before submitting a pull request and fix _all_ warnings. The automated builds will fail if a warning is generated.
 
+## Code of Conduct
+
+See the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 The contents of this repository are dual-licensed under the _MIT OR Apache
