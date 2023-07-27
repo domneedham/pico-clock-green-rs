@@ -12,6 +12,7 @@ use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
     display::display_matrix::DISPLAY_MATRIX,
+    speaker::{self, SoundType},
 };
 
 /// Channel for firing events of when tasks should be stopped.
@@ -84,19 +85,26 @@ impl App for PomodoroApp {
         "Pomodoro"
     }
 
-    async fn start(&mut self, _: Spawner) {
+    async fn start(&mut self, spawner: Spawner) {
         critical_section::with(|cs| {
             DISPLAY_MATRIX.clear_all(cs, true);
         });
 
-        if let RunningState::Finished = get_running_state().await {
-            POMO_STATE.lock().await.borrow_mut().get_mut().reset();
+        match get_running_state().await {
+            RunningState::NotStarted => {}
+            RunningState::Running => {}
+            RunningState::Paused => spawner.spawn(countdown()).unwrap(),
+            RunningState::Finished => POMO_STATE.lock().await.borrow_mut().get_mut().reset(),
         }
 
         show_time().await;
     }
 
     async fn stop(&mut self) {
+        if let RunningState::Running = get_running_state().await {
+            set_running(RunningState::Paused).await;
+        }
+
         STOP_APP_CHANNEL
             .immediate_publisher()
             .publish_immediate(StopAppTasks);
@@ -104,7 +112,10 @@ impl App for PomodoroApp {
 
     async fn button_one_short_press(&mut self, spawner: Spawner) {
         match get_running_state().await {
-            RunningState::NotStarted => spawner.spawn(countdown()).unwrap(),
+            RunningState::NotStarted => {
+                set_running(RunningState::Running).await;
+                spawner.spawn(countdown()).unwrap()
+            }
             RunningState::Running => {
                 // due to running delay, 1s is lost on button press, so add them back
                 let (mut minutes, mut seconds) = get_time().await;
@@ -120,7 +131,10 @@ impl App for PomodoroApp {
                 set_running(RunningState::Paused).await
             }
             RunningState::Paused => set_running(RunningState::Running).await,
-            RunningState::Finished => spawner.spawn(countdown()).unwrap(),
+            RunningState::Finished => {
+                POMO_STATE.lock().await.borrow_mut().get_mut().reset();
+                show_time().await;
+            }
         }
     }
 
@@ -209,6 +223,10 @@ async fn set_running(running: RunningState) {
     } else {
         DISPLAY_MATRIX.hide_icon("CountDown");
     }
+
+    if let RunningState::Finished = running {
+        speaker::sound(SoundType::RepeatLongBeep(3));
+    }
 }
 
 /// Will show the time grabbed from the static pomodoro state.
@@ -225,7 +243,7 @@ async fn countdown() {
     let mut stop_task_sub = STOP_APP_CHANNEL.subscriber().unwrap();
 
     show_time().await;
-    set_running(RunningState::Running).await;
+
     loop {
         let running_state = get_running_state().await;
         match running_state {
@@ -236,6 +254,7 @@ async fn countdown() {
 
                 if seconds == 0 {
                     if minutes == 0 {
+                        set_running(RunningState::Finished).await;
                         break;
                     }
 
@@ -265,5 +284,4 @@ async fn countdown() {
             RunningState::Finished => break,
         }
     }
-    set_running(RunningState::Finished).await;
 }
