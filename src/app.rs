@@ -43,10 +43,16 @@ pub trait App {
     async fn button_three_press(&mut self, press: ButtonPress, spawner: Spawner);
 }
 
+/// All apps that can be switched too.
 #[derive(PartialEq)]
 enum Apps {
+    /// The clock app.
     Clock,
+
+    /// The pomodoro app.
     Pomodoro,
+
+    /// The settings app.
     Settings,
 }
 
@@ -57,11 +63,22 @@ enum Apps {
 ///
 /// It contains the main loop on the main core.
 pub struct AppController {
+    /// The current active app. This should be the one set even if viewing from the app switcher.
     active_app: Apps,
+
+    /// Showing the app picker or not.
     showing_app_picker: bool,
+
+    /// Clock app.
     clock_app: ClockApp,
+
+    /// Pomodoro app.
     pomodoro_app: PomodoroApp,
+
+    /// Settings app.
     settings_app: SettingsApp,
+
+    /// Embassy spawner so apps can spawn their own background tasks.
     spawner: Spawner,
 }
 

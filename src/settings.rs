@@ -267,6 +267,7 @@ mod configurations {
 
     /// RTC hour configuration.
     pub struct HourConfiguration {
+        /// The hour being configured.
         hour: u32,
     }
 
@@ -314,6 +315,7 @@ mod configurations {
 
     /// RTC minute configuration.
     pub struct MinuteConfiguration {
+        /// The minute being configured.
         minute: u32,
     }
 
@@ -361,6 +363,7 @@ mod configurations {
 
     /// RTC year configuration.
     pub struct YearConfiguration {
+        /// The year being configured.
         year: i32,
     }
 
@@ -407,6 +410,7 @@ mod configurations {
 
     /// RTC month configuration.
     pub struct MonthConfiguration {
+        /// The month being configured.
         month: u32,
     }
 
@@ -454,7 +458,10 @@ mod configurations {
 
     /// RTC day configuration.
     pub struct DayConfiguration {
+        /// The day being configured.
         day: u32,
+
+        /// The current month in RTC. This is purely just a reference and should not be mutated.
         month: u32,
     }
 
