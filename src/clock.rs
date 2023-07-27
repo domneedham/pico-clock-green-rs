@@ -11,12 +11,16 @@ use crate::{
     rtc::{self},
 };
 
+/// Channel for firing events of when tasks should be stopped.
 static PUB_SUB_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
     PubSubChannel::new();
 
+/// Clock app.
+/// Will show the current time on the display.
 pub struct ClockApp {}
 
 impl ClockApp {
+    /// Create a new clock app.
     pub fn new() -> Self {
         Self {}
     }
@@ -57,6 +61,7 @@ impl App for ClockApp {
 }
 
 impl ClockApp {
+    /// Start the clock background task.
     async fn start_clock(&self, spawner: Spawner) {
         // try to start the clock, but wait if the spawner is busy and retry
         loop {
@@ -68,13 +73,17 @@ impl ClockApp {
         }
     }
 
+    /// Cancel the clock background task.
     fn cancel_clock(&self) {
         PUB_SUB_CHANNEL
             .immediate_publisher()
-            .publish_immediate(StopAppTasks());
+            .publish_immediate(StopAppTasks);
     }
 }
 
+/// The clock background task. Shows the current time and appropriate icons for AM/PM and day of week.
+///
+/// Will continue to run until signalled not too.
 #[embassy_executor::task]
 async fn clock() {
     let mut sub = PUB_SUB_CHANNEL.subscriber().unwrap();

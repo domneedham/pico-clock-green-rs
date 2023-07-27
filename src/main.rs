@@ -2,13 +2,31 @@
 #![no_main]
 #![feature(async_fn_in_trait)]
 #![feature(type_alias_impl_trait)]
+#![deny(missing_docs)]
+#![forbid(clippy::missing_docs_in_private_items)]
 
+//! Implementation of the Waveshare Pico Clock Green written in Rust.
+//! This is evolving and not feature complete.
+
+/// Use app module.
 mod app;
+
+/// Use button module.
 mod buttons;
+
+/// Use clock module.
 mod clock;
+
+/// Use display module.
 mod display;
+
+/// Use pomodoro module.
 mod pomodoro;
+
+/// Use rtc module.
 mod rtc;
+
+/// Use settings module.
 mod settings;
 
 use crate::display::{Display, DisplayPins};
@@ -28,10 +46,16 @@ use rtc::Ds3231;
 use settings::SettingsApp;
 use {defmt as _, defmt_rtt as _, panic_probe as _};
 
+/// Executor for core 0.
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
+
+/// Executor for core 1.
 static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
+
+/// Preallocate stack memory for the second pico core.
 static mut CORE1_STACK: Stack<4096> = Stack::new();
 
+/// Entry point.
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
@@ -79,6 +103,7 @@ fn main() -> ! {
     });
 }
 
+/// Task to run on the main core.
 #[embassy_executor::task]
 async fn main_core(
     spawner: Spawner,
@@ -107,6 +132,7 @@ async fn main_core(
     app_controller.run_forever().await;
 }
 
+/// Task to run on the second core.
 #[embassy_executor::task]
 async fn display_core(mut display: Display<'static>) {
     display.run_forever().await;

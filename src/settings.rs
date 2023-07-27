@@ -16,40 +16,79 @@ use self::configurations::{
     YearConfiguration,
 };
 
+/// Each of the possible configurations to run through in the settings app.
 enum SettingsConfig {
+    /// Modify the hour in the RTC.
     Hour,
+
+    /// Modify the minute in the RTC.
     Minute,
+
+    /// Modify the year in the RTC.
     Year,
+
+    /// Modify the month in the RTC.
     Month,
+
+    /// Modify the day in the RTC.
     Day,
 }
 
+/// Each of the possible configurations, but with data so the blink task can be displayed accurately.
 enum BlinkTask {
+    /// Blink the hour section of the display. (hour, minute)
     Hour(u32, u32),
+
+    /// Blink the minute section of the display. (hour, minute)
     Minute(u32, u32),
+
+    /// Blink the full year in the display.
     Year(i32),
+
+    /// Blink the month section of the display. (month, day)
     Month(u32, u32),
+
+    /// Blink the day section of the display. (month, day)
     Day(u32, u32),
 }
 
-struct NextSettingsStart();
+/// Named struct for next settings start signal.
+struct NextSettingsStart;
 
+/// Channel for firing events of when tasks should be stopped.
 static STOP_APP_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
     PubSubChannel::new();
 
+/// Signal for when the next item in settings is being configured.
 static NEXT_SETTINGS_START: Signal<ThreadModeRawMutex, NextSettingsStart> = Signal::new();
+
+/// Signal for blink task to know what the item that should be blinked.
 static SETTINGS_DISPLAY_QUEUE: Signal<ThreadModeRawMutex, BlinkTask> = Signal::new();
 
+/// Settings app.
+/// Allows for setting RTC and will be expanded for more options.
 pub struct SettingsApp {
+    /// The hour configuration mini app.
     hour_config: configurations::HourConfiguration,
+
+    /// The minute configuration mini app.
     minute_config: configurations::MinuteConfiguration,
+
+    /// The year configuration mini app.
     year_config: configurations::YearConfiguration,
+
+    /// The month configuration mini app.
     month_config: configurations::MonthConfiguration,
+
+    /// The day configuration mini app.
     day_config: configurations::DayConfiguration,
+
+    /// The current active mini app being configured.
     active_config: SettingsConfig,
 }
 
 impl SettingsApp {
+    /// Create a new settings app.
     pub fn new() -> Self {
         Self {
             hour_config: HourConfiguration::new(),
@@ -81,7 +120,7 @@ impl App for SettingsApp {
     async fn stop(&mut self) {
         STOP_APP_CHANNEL
             .immediate_publisher()
-            .publish_immediate(StopAppTasks());
+            .publish_immediate(StopAppTasks);
     }
 
     async fn button_one_short_press(&mut self, _: Spawner) {
@@ -112,7 +151,7 @@ impl App for SettingsApp {
             }
         }
 
-        NEXT_SETTINGS_START.signal(NextSettingsStart());
+        NEXT_SETTINGS_START.signal(NextSettingsStart);
     }
 
     async fn button_two_press(&mut self, press: ButtonPress, _: Spawner) {
@@ -137,14 +176,18 @@ impl App for SettingsApp {
 }
 
 impl SettingsApp {
+    /// End of settings configuration.
+    ///
+    /// Stop tasks, show "Done" and then show app switcher after delay.
     async fn end(&mut self) {
         self.stop().await;
         DISPLAY_MATRIX.queue_text("Done", 2000, true).await;
         Timer::after(Duration::from_secs(2)).await;
-        SHOW_APP_SWITCHER.signal(ShowAppSwitcher());
+        SHOW_APP_SWITCHER.signal(ShowAppSwitcher);
     }
 }
 
+/// Blink the active configuration background task.
 #[embassy_executor::task]
 async fn blink() {
     let mut stop_task_sub = STOP_APP_CHANNEL.subscriber().unwrap();
@@ -201,20 +244,30 @@ async fn blink() {
     }
 }
 
+/// All settings configurations mini apps.
 mod configurations {
     use crate::{buttons::ButtonPress, rtc};
 
     use super::SETTINGS_DISPLAY_QUEUE;
 
+    /// Common trait that all settings configs should implement.
     pub trait Configuration {
+        /// Start the configuration.
         async fn start(&mut self);
+
+        /// Save and stop the configuration.
         async fn save(&mut self);
 
+        /// Handle middle button press.
         async fn button_two_press(&mut self, press: ButtonPress);
+
+        /// Handle bottom button press.
         async fn button_three_press(&mut self, press: ButtonPress);
     }
 
+    /// RTC hour configuration.
     pub struct HourConfiguration {
+        /// The hour being configured.
         hour: u32,
     }
 
@@ -248,17 +301,21 @@ mod configurations {
     }
 
     impl HourConfiguration {
+        /// Create a new hour configuration.
         pub fn new() -> Self {
             Self { hour: 0 }
         }
 
+        /// Show hour configuration in blink task.
         async fn show(&self) {
             let minute = rtc::get_minute().await;
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Hour(self.hour, minute));
         }
     }
 
+    /// RTC minute configuration.
     pub struct MinuteConfiguration {
+        /// The minute being configured.
         minute: u32,
     }
 
@@ -292,17 +349,21 @@ mod configurations {
     }
 
     impl MinuteConfiguration {
+        /// Create a new minute configuration.
         pub fn new() -> Self {
             Self { minute: 0 }
         }
 
+        /// Show minute configuration in blink task.
         async fn show(&self) {
             let hour = rtc::get_hour().await;
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Minute(hour, self.minute));
         }
     }
 
+    /// RTC year configuration.
     pub struct YearConfiguration {
+        /// The year being configured.
         year: i32,
     }
 
@@ -336,16 +397,20 @@ mod configurations {
     }
 
     impl YearConfiguration {
+        /// Create a new year configuration.
         pub fn new() -> Self {
             Self { year: 0 }
         }
 
+        /// Show year configuration in blink task.
         async fn show(&self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Year(self.year));
         }
     }
 
+    /// RTC month configuration.
     pub struct MonthConfiguration {
+        /// The month being configured.
         month: u32,
     }
 
@@ -379,18 +444,24 @@ mod configurations {
     }
 
     impl MonthConfiguration {
+        /// Create a new month configuration.
         pub fn new() -> Self {
             Self { month: 0 }
         }
 
+        /// Show minute configuration in blink task.
         async fn show(&self) {
             let day = rtc::get_day().await;
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Month(self.month, day));
         }
     }
 
+    /// RTC day configuration.
     pub struct DayConfiguration {
+        /// The day being configured.
         day: u32,
+
+        /// The current month in RTC. This is purely just a reference and should not be mutated.
         month: u32,
     }
 
@@ -425,10 +496,12 @@ mod configurations {
     }
 
     impl DayConfiguration {
+        /// Create a new day configuration.
         pub fn new() -> Self {
             Self { day: 0, month: 0 }
         }
 
+        /// Show day configuration in blink task.
         async fn show(&self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Day(self.month, self.day));
         }
