@@ -29,6 +29,9 @@ mod rtc;
 /// Use settings module.
 mod settings;
 
+/// Use speaker module.
+mod speaker;
+
 use crate::display::{Display, DisplayPins};
 
 use app::AppController;
@@ -73,6 +76,9 @@ fn main() -> ! {
     let button_two: Input<'_, PIN_17> = Input::new(p.PIN_17, Pull::Up);
     let button_three: Input<'_, PIN_15> = Input::new(p.PIN_15, Pull::Up);
 
+    // init speaker
+    let speaker: Output<'_, PIN_14> = Output::new(p.PIN_14, Level::Low);
+
     // init display
     let a0: Output<'_, PIN_16> = Output::new(p.PIN_16, Level::Low);
     let a1: Output<'_, PIN_18> = Output::new(p.PIN_18, Level::Low);
@@ -98,6 +104,7 @@ fn main() -> ! {
                 button_one,
                 button_two,
                 button_three,
+                speaker,
             ))
             .unwrap();
     });
@@ -111,6 +118,7 @@ async fn main_core(
     button_one: Input<'static, PIN_2>,
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
+    speaker: Output<'static, PIN_14>,
 ) {
     rtc::init(ds3231).await;
 
@@ -123,6 +131,8 @@ async fn main_core(
     spawner
         .spawn(buttons::button_three_task(button_three))
         .unwrap();
+
+    spawner.spawn(speaker::speaker_task(speaker)).unwrap();
 
     let clock_app = ClockApp::new();
     let pomodoro_app = PomodoroApp::new();
