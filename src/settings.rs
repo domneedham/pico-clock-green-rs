@@ -12,8 +12,8 @@ use crate::{
 };
 
 use self::configurations::{
-    Configuration, DayConfiguration, HourConfiguration, MinuteConfiguration, MonthConfiguration,
-    YearConfiguration,
+    Configuration, DayConfiguration, HourConfiguration, HourlyRingConfiguration,
+    MinuteConfiguration, MonthConfiguration, YearConfiguration,
 };
 
 /// Each of the possible configurations to run through in the settings app.
@@ -32,10 +32,16 @@ enum SettingsConfig {
 
     /// Modify the day in the RTC.
     Day,
+
+    /// Modify the hourly ring setting.
+    HourlyRing,
 }
 
 /// Each of the possible configurations, but with data so the blink task can be displayed accurately.
 enum BlinkTask {
+    /// Use to keep the blink task going but not set the display.
+    None,
+
     /// Blink the hour section of the display. (hour, minute)
     Hour(u32, u32),
 
@@ -83,6 +89,9 @@ pub struct SettingsApp {
     /// The day configuration mini app.
     day_config: configurations::DayConfiguration,
 
+    /// The hourly ring configuration mini app.
+    hourly_ring_config: configurations::HourlyRingConfiguration,
+
     /// The current active mini app being configured.
     active_config: SettingsConfig,
 }
@@ -96,6 +105,7 @@ impl SettingsApp {
             year_config: YearConfiguration::new(),
             month_config: MonthConfiguration::new(),
             day_config: DayConfiguration::new(),
+            hourly_ring_config: HourlyRingConfiguration::new(),
             active_config: SettingsConfig::Hour,
         }
     }
@@ -147,6 +157,11 @@ impl App for SettingsApp {
             }
             SettingsConfig::Day => {
                 self.day_config.save().await;
+                self.active_config = SettingsConfig::HourlyRing;
+                self.hourly_ring_config.start().await;
+            }
+            SettingsConfig::HourlyRing => {
+                self.hourly_ring_config.save().await;
                 self.end().await;
             }
         }
@@ -161,6 +176,7 @@ impl App for SettingsApp {
             SettingsConfig::Year => self.year_config.button_two_press(press).await,
             SettingsConfig::Month => self.month_config.button_two_press(press).await,
             SettingsConfig::Day => self.day_config.button_two_press(press).await,
+            SettingsConfig::HourlyRing => self.hourly_ring_config.button_two_press(press).await,
         }
     }
 
@@ -171,6 +187,7 @@ impl App for SettingsApp {
             SettingsConfig::Year => self.year_config.button_three_press(press).await,
             SettingsConfig::Month => self.month_config.button_three_press(press).await,
             SettingsConfig::Day => self.day_config.button_three_press(press).await,
+            SettingsConfig::HourlyRing => self.hourly_ring_config.button_three_press(press).await,
         }
     }
 }
@@ -199,6 +216,7 @@ async fn blink() {
         }
 
         match blink_task {
+            BlinkTask::None => {}
             BlinkTask::Hour(hour, min) => {
                 DISPLAY_MATRIX.queue_time(hour, min, 750, true).await;
                 DISPLAY_MATRIX
@@ -246,7 +264,10 @@ async fn blink() {
 
 /// All settings configurations mini apps.
 mod configurations {
-    use crate::{buttons::ButtonPress, rtc};
+    use core::fmt::Write;
+    use heapless::String;
+
+    use crate::{buttons::ButtonPress, display::display_matrix::DISPLAY_MATRIX, rtc};
 
     use super::SETTINGS_DISPLAY_QUEUE;
 
@@ -504,6 +525,54 @@ mod configurations {
         /// Show day configuration in blink task.
         async fn show(&self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::Day(self.month, self.day));
+        }
+    }
+
+    /// RTC day configuration.
+    pub struct HourlyRingConfiguration {
+        /// The ring state.
+        state: bool,
+    }
+
+    impl Configuration for HourlyRingConfiguration {
+        async fn start(&mut self) {
+            SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
+            self.state = false;
+            self.show().await;
+        }
+
+        async fn save(&mut self) {
+            // TODO: add to config
+        }
+
+        async fn button_two_press(&mut self, _: ButtonPress) {
+            self.state = !self.state;
+            self.show().await;
+        }
+
+        async fn button_three_press(&mut self, _: ButtonPress) {
+            self.state = !self.state;
+            self.show().await;
+        }
+    }
+
+    impl HourlyRingConfiguration {
+        /// Create a new day configuration.
+        pub fn new() -> Self {
+            Self { state: false }
+        }
+
+        /// Show day configuration in blink task.
+        async fn show(&self) {
+            let mut text: String<16> = String::new();
+            _ = write!(text, "Hourly ring:");
+            if self.state {
+                _ = write!(text, "On");
+            } else {
+                _ = write!(text, "Off");
+            }
+
+            DISPLAY_MATRIX.queue_text(text.as_str(), 1000, true).await;
         }
     }
 }
