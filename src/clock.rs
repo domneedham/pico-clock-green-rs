@@ -7,8 +7,10 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
+    config,
     display::display_matrix::DISPLAY_MATRIX,
     rtc::{self},
+    speaker,
 };
 
 /// Channel for firing events of when tasks should be stopped.
@@ -89,7 +91,6 @@ async fn clock() {
     let mut sub = PUB_SUB_CHANNEL.subscriber().unwrap();
 
     let datetime = rtc::get_datetime().await;
-
     let mut last_hour = datetime.hour();
     let mut last_min = datetime.minute();
     let mut last_day = datetime.weekday();
@@ -107,6 +108,11 @@ async fn clock() {
     }
 
     DISPLAY_MATRIX.show_day_icon(last_day);
+
+    let should_hourly_ring = config::CONFIG.lock().await.borrow().get_hourly_ring();
+    if should_hourly_ring {
+        DISPLAY_MATRIX.show_icon("Hourly");
+    }
 
     loop {
         let res = select(sub.next_message(), Timer::after(Duration::from_secs(1))).await;
@@ -127,6 +133,10 @@ async fn clock() {
                     } else {
                         DISPLAY_MATRIX.hide_icon("PM");
                         DISPLAY_MATRIX.show_icon("AM");
+                    }
+
+                    if hour != last_hour && should_hourly_ring {
+                        speaker::sound(speaker::SoundType::ShortBeep);
                     }
 
                     last_hour = hour;
