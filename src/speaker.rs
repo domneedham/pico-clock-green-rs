@@ -16,10 +16,10 @@ pub enum SoundType {
     Beep(u64),
 
     /// Repeat the short beep X times.
-    RepeartShortBeep(u8),
+    RepeatShortBeep(u8),
 
     /// Repeat the long beep X times.
-    RepeartLongBeep(u8),
+    RepeatLongBeep(u8),
 
     /// Repeat a custom duration beep X times.
     RepeatBeep(u8, u64),
@@ -58,10 +58,10 @@ pub async fn speaker_task(mut speaker: Output<'static, PIN_14>) -> ! {
             SoundType::Beep(duration) => {
                 play(&mut speaker, 1, Duration::from_millis(duration)).await
             }
-            SoundType::RepeartShortBeep(times) => {
+            SoundType::RepeatShortBeep(times) => {
                 play(&mut speaker, times, Duration::from_millis(100)).await
             }
-            SoundType::RepeartLongBeep(times) => {
+            SoundType::RepeatLongBeep(times) => {
                 play(&mut speaker, times, Duration::from_millis(500)).await
             }
             SoundType::RepeatBeep(times, duration) => {

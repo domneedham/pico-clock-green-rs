@@ -198,6 +198,10 @@ impl AppController {
             Apps::Settings => self.settings_app.stop().await,
         }
 
+        critical_section::with(|cs| {
+            DISPLAY_MATRIX.clear_all(cs, true);
+        });
+
         self.show_next_app().await;
     }
 
