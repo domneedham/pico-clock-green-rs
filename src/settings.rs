@@ -267,7 +267,7 @@ mod configurations {
     use core::fmt::Write;
     use heapless::String;
 
-    use crate::{buttons::ButtonPress, display::display_matrix::DISPLAY_MATRIX, rtc};
+    use crate::{buttons::ButtonPress, config, display::display_matrix::DISPLAY_MATRIX, rtc};
 
     use super::SETTINGS_DISPLAY_QUEUE;
 
@@ -537,12 +537,16 @@ mod configurations {
     impl Configuration for HourlyRingConfiguration {
         async fn start(&mut self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
-            self.state = false;
+            self.state = config::CONFIG.lock().await.borrow().get_hourly_ring();
             self.show().await;
         }
 
         async fn save(&mut self) {
-            // TODO: add to config
+            config::CONFIG
+                .lock()
+                .await
+                .borrow_mut()
+                .set_hourly_ring(self.state);
         }
 
         async fn button_two_press(&mut self, _: ButtonPress) {

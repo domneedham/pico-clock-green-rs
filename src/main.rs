@@ -14,6 +14,9 @@ mod app;
 /// Use button module.
 mod buttons;
 
+/// Use config module.
+mod config;
+
 /// Use clock module.
 mod clock;
 
