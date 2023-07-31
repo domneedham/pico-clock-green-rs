@@ -2,7 +2,10 @@ use core::cell::RefCell;
 use core::fmt::Write;
 use critical_section::{CriticalSection, Mutex};
 use defmt::info;
-use embassy_rp::gpio::Output;
+use embassy_rp::{
+    adc::{Adc, Async, Pin},
+    gpio::Output,
+};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use embassy_time::{Duration, Timer};
 use heapless::Vec;
@@ -34,6 +37,11 @@ pub struct DisplayPins<'a> {
 
     /// LE pin.
     le: Output<'a, embassy_rp::peripherals::PIN_12>,
+
+    /// ADC
+    adc: Adc<'a, Async>,
+
+    ain: Pin<'a>,
 }
 
 impl<'a> DisplayPins<'a> {
@@ -46,6 +54,8 @@ impl<'a> DisplayPins<'a> {
         sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
         clk: Output<'a, embassy_rp::peripherals::PIN_10>,
         le: Output<'a, embassy_rp::peripherals::PIN_12>,
+        adc: Adc<'a, Async>,
+        ain: Pin<'a>,
     ) -> Self {
         Self {
             a0,
@@ -55,6 +65,8 @@ impl<'a> DisplayPins<'a> {
             sdi,
             clk,
             le,
+            adc,
+            ain,
         }
     }
 }
@@ -76,6 +88,8 @@ impl<'a> Display<'a> {
 
     /// The main display loop. Will not terminate.
     pub async fn run_forever(&mut self) -> ! {
+        let level = self.pins.adc.read(&mut self.pins.ain).await.unwrap();
+        info!("Light level {}", level);
         loop {
             self.row = (self.row + 1) % 8;
 

@@ -42,8 +42,10 @@ use clock::ClockApp;
 use ds323x::Ds323x;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
+    adc::{Adc, Config as ADCConfig, InterruptHandler, Pin},
+    bind_interrupts,
     gpio::{Input, Level, Output, Pull},
-    i2c::{self, Config},
+    i2c::{self, Config as I2CConfig},
     multicore::Stack,
     peripherals::*,
 };
@@ -61,13 +63,17 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 /// Preallocate stack memory for the second pico core.
 static mut CORE1_STACK: Stack<4096> = Stack::new();
 
+bind_interrupts!(struct Irqs {
+    ADC_IRQ_FIFO => InterruptHandler;
+});
+
 /// Entry point.
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
 
     // init rtc
-    let i2c = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6, Config::default());
+    let i2c = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6, I2CConfig::default());
     let ds323x: Ds323x<
         ds323x::interface::I2cInterface<i2c::I2c<'_, I2C1, i2c::Blocking>>,
         ds323x::ic::DS3231,
@@ -90,7 +96,9 @@ fn main() -> ! {
     let sdi: Output<'_, PIN_11> = Output::new(p.PIN_11, Level::Low);
     let clk: Output<'_, PIN_10> = Output::new(p.PIN_10, Level::Low);
     let le: Output<'_, PIN_12> = Output::new(p.PIN_12, Level::Low);
-    let display_pins: DisplayPins<'_> = DisplayPins::new(a0, a1, a2, oe, sdi, clk, le);
+    let adc = Adc::new(p.ADC, Irqs, ADCConfig::default());
+    let ain = Pin::new(p.PIN_26, Pull::None);
+    let display_pins: DisplayPins<'_> = DisplayPins::new(a0, a1, a2, oe, sdi, clk, le, adc, ain);
     let display: Display<'_> = Display::new(display_pins);
 
     embassy_rp::multicore::spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
