@@ -216,7 +216,7 @@ impl SettingsApp {
     /// Stop tasks, show "Done" and then show app switcher after delay.
     async fn end(&mut self) {
         self.stop().await;
-        DISPLAY_MATRIX.queue_text("Done", 2000, true).await;
+        DISPLAY_MATRIX.queue_text("Done", 2000, true, false).await;
         Timer::after(Duration::from_secs(2)).await;
         SHOW_APP_SWITCHER.signal(ShowAppSwitcher);
     }
@@ -236,20 +236,20 @@ async fn blink() {
         match blink_task {
             BlinkTask::None => {}
             BlinkTask::Hour(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, 750, true).await;
+                DISPLAY_MATRIX.queue_time(hour, min, 750, true, false).await;
                 DISPLAY_MATRIX
                     .queue_time_left_side_blink(min, 350, false)
                     .await;
             }
             BlinkTask::Minute(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, 750, true).await;
+                DISPLAY_MATRIX.queue_time(hour, min, 750, true, false).await;
                 DISPLAY_MATRIX
                     .queue_time_right_side_blink(hour, 350, false)
                     .await;
             }
             BlinkTask::Year(year) => {
                 DISPLAY_MATRIX.queue_year(year, 750, true).await;
-                DISPLAY_MATRIX.queue_text(" ", 350, false).await;
+                DISPLAY_MATRIX.queue_text(" ", 350, false, false).await;
             }
             BlinkTask::Month(month, day) => {
                 DISPLAY_MATRIX.queue_date(month, day, 750, true).await;
@@ -594,7 +594,9 @@ mod configurations {
                 _ = write!(text, "Off");
             }
 
-            DISPLAY_MATRIX.queue_text(text.as_str(), 1000, true).await;
+            DISPLAY_MATRIX
+                .queue_text(text.as_str(), 1000, true, false)
+                .await;
         }
     }
 
@@ -646,7 +648,9 @@ mod configurations {
                 _ = write!(text, "Off");
             }
 
-            DISPLAY_MATRIX.queue_text(text.as_str(), 1000, true).await;
+            DISPLAY_MATRIX
+                .queue_text(text.as_str(), 1000, true, false)
+                .await;
         }
     }
 }

@@ -232,7 +232,9 @@ async fn set_running(running: RunningState) {
 /// Will show the time grabbed from the static pomodoro state.
 async fn show_time() {
     let (minutes, seconds) = get_time().await;
-    DISPLAY_MATRIX.queue_time(minutes, seconds, 0, true).await;
+    DISPLAY_MATRIX
+        .queue_time(minutes, seconds, 0, true, false)
+        .await;
 }
 
 /// The pomodoro countdown loop.

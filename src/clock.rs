@@ -7,7 +7,7 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
-    config,
+    config::{self, TemperaturePreference},
     display::display_matrix::DISPLAY_MATRIX,
     rtc::{self},
     speaker, temperature,
@@ -44,7 +44,7 @@ impl App for ClockApp {
     async fn button_one_short_press(&mut self, spawner: Spawner) {
         self.cancel_clock();
         DISPLAY_MATRIX
-            .queue_text("CLOCK INTERRUPT", 1000, true)
+            .queue_text("CLOCK INTERRUPT", 1000, true, false)
             .await;
         self.start_clock(spawner).await;
     }
@@ -114,7 +114,7 @@ async fn clock() {
     let mut last_day = datetime.weekday();
 
     DISPLAY_MATRIX
-        .queue_time(last_hour, last_min, 1000, false)
+        .queue_time(last_hour, last_min, 1000, false, false)
         .await;
 
     if last_hour >= 12 {
@@ -137,11 +137,7 @@ async fn clock() {
         DISPLAY_MATRIX.show_icon("MoveOn");
     }
 
-    let temp_pref = config::CONFIG
-        .lock()
-        .await
-        .borrow()
-        .get_temperature_preference();
+    let temp_pref = get_temp_preference().await;
     DISPLAY_MATRIX.show_temperature_icon(temp_pref);
 
     loop {
@@ -181,7 +177,11 @@ async fn clock() {
 
                 let second = datetime.second();
                 if second == 25 && should_scroll_temp {
-                    show_temperature().await;
+                    let temp_pref = get_temp_preference().await;
+                    let temp = get_temp().await;
+                    DISPLAY_MATRIX
+                        .queue_time_temperature(hour, min, temp, temp_pref, false)
+                        .await;
                     show_time(hour, min).await;
                 }
             }
@@ -189,19 +189,34 @@ async fn clock() {
     }
 }
 
-/// Show the temperature.
-async fn show_temperature() {
-    let pref = config::CONFIG
+/// Get the temperature preference.
+async fn get_temp_preference() -> TemperaturePreference {
+    config::CONFIG
         .lock()
         .await
         .borrow()
-        .get_temperature_preference();
+        .get_temperature_preference()
+}
+
+/// Get the current temperature.
+async fn get_temp() -> f32 {
     let temp = temperature::get_temperature_off_preference().await;
+    temp
+}
+
+/// Show the temperature.
+async fn show_temperature() {
+    let temp_pref = get_temp_preference().await;
+    let temp = get_temp().await;
     // show temperature (holds for 5 seconds) and then show time again
-    DISPLAY_MATRIX.queue_temperature(temp, pref, false).await;
+    DISPLAY_MATRIX
+        .queue_temperature(temp, temp_pref, false, false)
+        .await;
 }
 
 /// Show the time.
 async fn show_time(hour: u32, minute: u32) {
-    DISPLAY_MATRIX.queue_time(hour, minute, 1000, false).await;
+    DISPLAY_MATRIX
+        .queue_time(hour, minute, 1000, false, false)
+        .await;
 }
