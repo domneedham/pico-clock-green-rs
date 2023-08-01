@@ -128,6 +128,8 @@ pub mod display_matrix {
     use embassy_sync::signal::Signal;
     use heapless::String;
 
+    use crate::config::TemperaturePreference;
+
     use super::*;
 
     /// Process the text buffer background task.
@@ -800,6 +802,20 @@ pub mod display_matrix {
                 Weekday::Sun => {
                     self.hide_icon("Sat");
                     self.show_icon("Sun");
+                }
+            }
+        }
+
+        /// Show the correct temperature preference icon.
+        pub fn show_temperature_icon(&self, pref: TemperaturePreference) {
+            match pref {
+                TemperaturePreference::Celcius => {
+                    self.hide_icon("°F");
+                    self.show_icon("°C");
+                }
+                TemperaturePreference::Fahrenheit => {
+                    self.hide_icon("°C");
+                    self.show_icon("°F");
                 }
             }
         }

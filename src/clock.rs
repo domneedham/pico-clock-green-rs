@@ -51,9 +51,18 @@ impl App for ClockApp {
     }
 
     async fn button_two_press(&mut self, _: ButtonPress, _: Spawner) {
-        critical_section::with(|cs| {
-            DISPLAY_MATRIX.clear_all(cs, true);
-        });
+        config::CONFIG
+            .lock()
+            .await
+            .borrow_mut()
+            .toggle_temperature_preference();
+
+        let temp_pref = config::CONFIG
+            .lock()
+            .await
+            .borrow()
+            .get_temperature_preference();
+        DISPLAY_MATRIX.show_temperature_icon(temp_pref);
     }
 
     async fn button_three_press(&mut self, _: ButtonPress, _: Spawner) {
@@ -114,6 +123,13 @@ async fn clock() {
     if should_hourly_ring {
         DISPLAY_MATRIX.show_icon("Hourly");
     }
+
+    let temp_pref = config::CONFIG
+        .lock()
+        .await
+        .borrow()
+        .get_temperature_preference();
+    DISPLAY_MATRIX.show_temperature_icon(temp_pref);
 
     loop {
         let res = select(sub.next_message(), Timer::after(Duration::from_secs(1))).await;

@@ -49,6 +49,18 @@ impl Config {
     pub fn set_temperature_preference(&mut self, new_state: TemperaturePreference) {
         self.temp_pref = new_state;
     }
+
+    /// Toggle the users temperature preference.
+    pub fn toggle_temperature_preference(&mut self) {
+        match self.get_temperature_preference() {
+            TemperaturePreference::Celcius => {
+                self.set_temperature_preference(TemperaturePreference::Fahrenheit)
+            }
+            TemperaturePreference::Fahrenheit => {
+                self.set_temperature_preference(TemperaturePreference::Celcius)
+            }
+        }
+    }
 }
 
 /// Static reference to the config so it can be accessed by all otehr apps.
