@@ -1,4 +1,3 @@
-use defmt::info;
 use ds323x::{Datelike, Timelike};
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either::First, Either::Second};
@@ -50,19 +49,28 @@ impl App for ClockApp {
         self.start_clock(spawner).await;
     }
 
-    async fn button_two_press(&mut self, _: ButtonPress, _: Spawner) {
-        config::CONFIG
-            .lock()
-            .await
-            .borrow_mut()
-            .toggle_temperature_preference();
+    async fn button_two_press(&mut self, press: ButtonPress, _: Spawner) {
+        match press {
+            ButtonPress::ShortPress => {
+                show_temperature().await;
+                let datetime = rtc::get_datetime().await;
+                show_time(datetime.hour(), datetime.minute()).await;
+            }
+            ButtonPress::LongPress => {
+                config::CONFIG
+                    .lock()
+                    .await
+                    .borrow_mut()
+                    .toggle_temperature_preference();
 
-        let temp_pref = config::CONFIG
-            .lock()
-            .await
-            .borrow()
-            .get_temperature_preference();
-        DISPLAY_MATRIX.show_temperature_icon(temp_pref);
+                let temp_pref = config::CONFIG
+                    .lock()
+                    .await
+                    .borrow()
+                    .get_temperature_preference();
+                DISPLAY_MATRIX.show_temperature_icon(temp_pref);
+            }
+        }
     }
 
     async fn button_three_press(&mut self, _: ButtonPress, _: Spawner) {
@@ -142,7 +150,7 @@ async fn clock() {
                 let hour = datetime.hour();
                 let min = datetime.minute();
                 if hour != last_hour || min != last_min {
-                    DISPLAY_MATRIX.queue_time(hour, min, 1000, false).await;
+                    show_time(hour, min).await;
 
                     if hour >= 12 {
                         DISPLAY_MATRIX.hide_icon("AM");
@@ -168,17 +176,25 @@ async fn clock() {
 
                 let second = datetime.second();
                 if second == 25 {
-                    let pref = config::CONFIG
-                        .lock()
-                        .await
-                        .borrow()
-                        .get_temperature_preference();
-                    let temp = temperature::get_temperature_off_preference().await;
-                    // show temperature (holds for 5 seconds) and then show time again
-                    DISPLAY_MATRIX.queue_temperature(temp, pref, false).await;
-                    DISPLAY_MATRIX.queue_time(hour, min, 1000, false).await;
+                    show_temperature().await;
+                    show_time(hour, min).await;
                 }
             }
         }
     }
+}
+
+async fn show_temperature() {
+    let pref = config::CONFIG
+        .lock()
+        .await
+        .borrow()
+        .get_temperature_preference();
+    let temp = temperature::get_temperature_off_preference().await;
+    // show temperature (holds for 5 seconds) and then show time again
+    DISPLAY_MATRIX.queue_temperature(temp, pref, false).await;
+}
+
+async fn show_time(hour: u32, minute: u32) {
+    DISPLAY_MATRIX.queue_time(hour, minute, 1000, false).await;
 }
