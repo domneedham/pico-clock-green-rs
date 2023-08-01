@@ -694,6 +694,23 @@ pub mod display_matrix {
                 .await;
         }
 
+        /// Queue the time and temperature into the text buffer. Will append to the queue.
+        ///
+        /// Will scroll the entire text base until it is empty.
+        ///
+        /// # Arguments
+        ///
+        /// * `hour` - The hour to show.
+        /// * `min` - The minute to show.
+        /// * `temp` - The temperature to show.
+        /// * `pref` - What the temperature reporting preference is.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_time_temperature(22, 10, 25, TemperaturePreference::Celcius, false).await; // will render as 22:10  20°C and scroll off the display.
+        /// DISPLAY_MATRIX.queue_time_temperature(6, 30, 50, TemperaturePreference::Fahrenheit, true).await; // will render as 06:30  50°F and scroll off the display.
         pub async fn queue_time_temperature(
             &self,
             hour: u32,

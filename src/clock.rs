@@ -178,7 +178,7 @@ async fn clock() {
                 let second = datetime.second();
                 if second == 25 && should_scroll_temp {
                     let temp_pref = get_temp_preference().await;
-                    let temp = get_temp().await;
+                    let temp = temperature::get_temperature_off_preference().await;
                     DISPLAY_MATRIX
                         .queue_time_temperature(hour, min, temp, temp_pref, false)
                         .await;
@@ -198,16 +198,10 @@ async fn get_temp_preference() -> TemperaturePreference {
         .get_temperature_preference()
 }
 
-/// Get the current temperature.
-async fn get_temp() -> f32 {
-    let temp = temperature::get_temperature_off_preference().await;
-    temp
-}
-
 /// Show the temperature.
 async fn show_temperature() {
     let temp_pref = get_temp_preference().await;
-    let temp = get_temp().await;
+    let temp = temperature::get_temperature_off_preference().await;
     // show temperature (holds for 5 seconds) and then show time again
     DISPLAY_MATRIX
         .queue_temperature(temp, temp_pref, false, false)
