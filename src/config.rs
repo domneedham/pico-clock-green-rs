@@ -19,6 +19,9 @@ pub struct Config {
 
     /// The users temperature reporting preference.
     temp_pref: TemperaturePreference,
+
+    /// Whether the clock should auto scroll and show the temperature.
+    auto_scroll_temp: bool,
 }
 
 impl Config {
@@ -27,6 +30,7 @@ impl Config {
         Self {
             hourly_ring: false,
             temp_pref: TemperaturePreference::Celcius,
+            auto_scroll_temp: true,
         }
     }
 
@@ -60,6 +64,16 @@ impl Config {
                 self.set_temperature_preference(TemperaturePreference::Celcius)
             }
         }
+    }
+
+    /// Get the auto scroll temperature state.
+    pub fn get_auto_scroll_temp(&self) -> bool {
+        self.auto_scroll_temp
+    }
+
+    /// Set the auto scroll temperature state.
+    pub fn set_auto_scroll_temp(&mut self, new_state: bool) {
+        self.auto_scroll_temp = new_state;
     }
 }
 

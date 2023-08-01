@@ -132,6 +132,11 @@ async fn clock() {
         DISPLAY_MATRIX.show_icon("Hourly");
     }
 
+    let should_scroll_temp = config::CONFIG.lock().await.borrow().get_auto_scroll_temp();
+    if should_scroll_temp {
+        DISPLAY_MATRIX.show_icon("MoveOn");
+    }
+
     let temp_pref = config::CONFIG
         .lock()
         .await
@@ -175,7 +180,7 @@ async fn clock() {
                 }
 
                 let second = datetime.second();
-                if second == 25 {
+                if second == 25 && should_scroll_temp {
                     show_temperature().await;
                     show_time(hour, min).await;
                 }

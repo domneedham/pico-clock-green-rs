@@ -12,8 +12,8 @@ use crate::{
 };
 
 use self::configurations::{
-    Configuration, DayConfiguration, HourConfiguration, HourlyRingConfiguration,
-    MinuteConfiguration, MonthConfiguration, YearConfiguration,
+    AutoScrollTempConfiguration, Configuration, DayConfiguration, HourConfiguration,
+    HourlyRingConfiguration, MinuteConfiguration, MonthConfiguration, YearConfiguration,
 };
 
 /// Each of the possible configurations to run through in the settings app.
@@ -35,6 +35,9 @@ enum SettingsConfig {
 
     /// Modify the hourly ring setting.
     HourlyRing,
+
+    /// Modify the auto scrolling of temperature setting.
+    AutoScrollTemp,
 }
 
 /// Each of the possible configurations, but with data so the blink task can be displayed accurately.
@@ -92,6 +95,9 @@ pub struct SettingsApp {
     /// The hourly ring configuration mini app.
     hourly_ring_config: configurations::HourlyRingConfiguration,
 
+    /// The auto scroll temp configuration mini app.
+    auto_scroll_temp_config: configurations::AutoScrollTempConfiguration,
+
     /// The current active mini app being configured.
     active_config: SettingsConfig,
 }
@@ -106,6 +112,7 @@ impl SettingsApp {
             month_config: MonthConfiguration::new(),
             day_config: DayConfiguration::new(),
             hourly_ring_config: HourlyRingConfiguration::new(),
+            auto_scroll_temp_config: AutoScrollTempConfiguration::new(),
             active_config: SettingsConfig::Hour,
         }
     }
@@ -162,6 +169,11 @@ impl App for SettingsApp {
             }
             SettingsConfig::HourlyRing => {
                 self.hourly_ring_config.save().await;
+                self.active_config = SettingsConfig::AutoScrollTemp;
+                self.auto_scroll_temp_config.start().await;
+            }
+            SettingsConfig::AutoScrollTemp => {
+                self.auto_scroll_temp_config.save().await;
                 self.end().await;
             }
         }
@@ -177,6 +189,9 @@ impl App for SettingsApp {
             SettingsConfig::Month => self.month_config.button_two_press(press).await,
             SettingsConfig::Day => self.day_config.button_two_press(press).await,
             SettingsConfig::HourlyRing => self.hourly_ring_config.button_two_press(press).await,
+            SettingsConfig::AutoScrollTemp => {
+                self.auto_scroll_temp_config.button_two_press(press).await
+            }
         }
     }
 
@@ -188,6 +203,9 @@ impl App for SettingsApp {
             SettingsConfig::Month => self.month_config.button_three_press(press).await,
             SettingsConfig::Day => self.day_config.button_three_press(press).await,
             SettingsConfig::HourlyRing => self.hourly_ring_config.button_three_press(press).await,
+            SettingsConfig::AutoScrollTemp => {
+                self.auto_scroll_temp_config.button_three_press(press).await
+            }
         }
     }
 }
@@ -570,6 +588,58 @@ mod configurations {
         async fn show(&self) {
             let mut text: String<16> = String::new();
             _ = write!(text, "Hourly ring:");
+            if self.state {
+                _ = write!(text, "On");
+            } else {
+                _ = write!(text, "Off");
+            }
+
+            DISPLAY_MATRIX.queue_text(text.as_str(), 1000, true).await;
+        }
+    }
+
+    /// RTC day configuration.
+    pub struct AutoScrollTempConfiguration {
+        /// The ring state.
+        state: bool,
+    }
+
+    impl Configuration for AutoScrollTempConfiguration {
+        async fn start(&mut self) {
+            SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
+            self.state = config::CONFIG.lock().await.borrow().get_auto_scroll_temp();
+            self.show().await;
+        }
+
+        async fn save(&mut self) {
+            config::CONFIG
+                .lock()
+                .await
+                .borrow_mut()
+                .set_auto_scroll_temp(self.state);
+        }
+
+        async fn button_two_press(&mut self, _: ButtonPress) {
+            self.state = !self.state;
+            self.show().await;
+        }
+
+        async fn button_three_press(&mut self, _: ButtonPress) {
+            self.state = !self.state;
+            self.show().await;
+        }
+    }
+
+    impl AutoScrollTempConfiguration {
+        /// Create a new day configuration.
+        pub fn new() -> Self {
+            Self { state: false }
+        }
+
+        /// Show day configuration in blink task.
+        async fn show(&self) {
+            let mut text: String<16> = String::new();
+            _ = write!(text, "Scroll temp:");
             if self.state {
                 _ = write!(text, "On");
             } else {
