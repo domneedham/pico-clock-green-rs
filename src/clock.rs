@@ -184,6 +184,7 @@ async fn clock() {
     }
 }
 
+/// Show the temperature.
 async fn show_temperature() {
     let pref = config::CONFIG
         .lock()
@@ -195,6 +196,7 @@ async fn show_temperature() {
     DISPLAY_MATRIX.queue_temperature(temp, pref, false).await;
 }
 
+/// Show the time.
 async fn show_time(hour: u32, minute: u32) {
     DISPLAY_MATRIX.queue_time(hour, minute, 1000, false).await;
 }

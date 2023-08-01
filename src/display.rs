@@ -288,7 +288,7 @@ pub mod display_matrix {
         /// Will start at the display offset.
         /// Will end at the last index.
         ///
-        /// Scrolling will be automatic if the text is too big to fit on the display but will hold on the for `hold_start_ms` on first end of display hit.
+        /// This will automatically scroll all the text off the display.
         ///
         /// # Arguments
         ///
