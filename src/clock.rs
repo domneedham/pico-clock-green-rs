@@ -7,7 +7,7 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
-    config::{self, TemperaturePreference},
+    config::{self},
     display::display_matrix::DISPLAY_MATRIX,
     rtc::{self},
     speaker, temperature,
@@ -41,13 +41,7 @@ impl App for ClockApp {
         self.cancel_clock();
     }
 
-    async fn button_one_short_press(&mut self, spawner: Spawner) {
-        self.cancel_clock();
-        DISPLAY_MATRIX
-            .queue_text("CLOCK INTERRUPT", 1000, true, false)
-            .await;
-        self.start_clock(spawner).await;
-    }
+    async fn button_one_short_press(&mut self, _: Spawner) {}
 
     async fn button_two_press(&mut self, press: ButtonPress, _: Spawner) {
         match press {
@@ -73,11 +67,7 @@ impl App for ClockApp {
         }
     }
 
-    async fn button_three_press(&mut self, _: ButtonPress, _: Spawner) {
-        critical_section::with(|cs| {
-            DISPLAY_MATRIX.fill_all(cs, true);
-        });
-    }
+    async fn button_three_press(&mut self, _: ButtonPress, _: Spawner) {}
 }
 
 impl ClockApp {
@@ -137,7 +127,7 @@ async fn clock() {
         DISPLAY_MATRIX.show_icon("MoveOn");
     }
 
-    let temp_pref = get_temp_preference().await;
+    let temp_pref = temperature::get_temperature_preference().await;
     DISPLAY_MATRIX.show_temperature_icon(temp_pref);
 
     loop {
@@ -177,7 +167,7 @@ async fn clock() {
 
                 let second = datetime.second();
                 if second == 25 && should_scroll_temp {
-                    let temp_pref = get_temp_preference().await;
+                    let temp_pref = temperature::get_temperature_preference().await;
                     let temp = temperature::get_temperature_off_preference().await;
                     DISPLAY_MATRIX
                         .queue_time_temperature(hour, min, temp, temp_pref, false)
@@ -189,18 +179,9 @@ async fn clock() {
     }
 }
 
-/// Get the temperature preference.
-async fn get_temp_preference() -> TemperaturePreference {
-    config::CONFIG
-        .lock()
-        .await
-        .borrow()
-        .get_temperature_preference()
-}
-
 /// Show the temperature.
 async fn show_temperature() {
-    let temp_pref = get_temp_preference().await;
+    let temp_pref = temperature::get_temperature_preference().await;
     let temp = temperature::get_temperature_off_preference().await;
     // show temperature (holds for 5 seconds) and then show time again
     DISPLAY_MATRIX

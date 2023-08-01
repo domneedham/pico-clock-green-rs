@@ -1,13 +1,20 @@
-use crate::{config, rtc};
+use crate::{
+    config::{self, TemperaturePreference},
+    rtc,
+};
 
-/// Get the temperature based on the current user preference.
-pub async fn get_temperature_off_preference() -> f32 {
-    let pref = config::CONFIG
+/// Get the temperature preference.
+pub async fn get_temperature_preference() -> TemperaturePreference {
+    config::CONFIG
         .lock()
         .await
         .borrow()
-        .get_temperature_preference();
+        .get_temperature_preference()
+}
 
+/// Get the temperature based on the current user preference.
+pub async fn get_temperature_off_preference() -> f32 {
+    let pref = get_temperature_preference().await;
     match pref {
         config::TemperaturePreference::Celcius => get_celcius().await,
         config::TemperaturePreference::Fahrenheit => get_fahrenheit().await,

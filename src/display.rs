@@ -184,10 +184,10 @@ pub mod display_matrix {
 
     impl DisplayMatrix {
         /// The first column after the icons.
-        const DISPLAY_OFFSET: usize = 2;
+        pub const DISPLAY_OFFSET: usize = 2;
 
         /// The last column that can be rendered.
-        const LAST_INDEX: usize = 24;
+        pub const LAST_INDEX: usize = 24;
 
         /// Clear the entire display. Includes icons.
         ///
@@ -201,20 +201,6 @@ pub mod display_matrix {
             }
 
             self.0.replace(cs, [[0; 32]; 8]);
-        }
-
-        /// Fill the entire display. Includes icons.
-        ///
-        /// # Arguments
-        ///
-        /// * `cs` - The critical section to access the display matrix.
-        /// * `remove_queue` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
-        pub fn fill_all(&self, cs: CriticalSection, remove_queue: bool) {
-            if remove_queue {
-                Self::cancel_and_remove_queue();
-            }
-
-            self.0.replace(cs, [[1; 32]; 8]);
         }
 
         /// Clear the display. Does not include icons.
