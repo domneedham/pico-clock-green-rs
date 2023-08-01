@@ -649,6 +649,39 @@ pub mod display_matrix {
                 .await;
         }
 
+        /// Queue the temperature into the text buffer. Will append to the queue.
+        ///
+        /// Will automatically add the appropriate temp symbol.
+        ///
+        /// # Arguments
+        ///
+        /// * `temp` - The temperature to show.
+        /// * `pref` - What the temperature reporting preference is.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_temperature(25, TemperaturePreference::Celcius, false).await; // will render as 20°C.
+        /// DISPLAY_MATRIX.queue_temperature(50, TemperaturePreference::Fahrenheit, false).await; // will render as 50°F.
+        pub async fn queue_temperature(
+            &self,
+            temp: f32,
+            pref: TemperaturePreference,
+            show_now: bool,
+        ) {
+            let mut text = String::<8>::new();
+
+            _ = write!(text, "{temp}");
+
+            match pref {
+                TemperaturePreference::Celcius => _ = write!(text, "°C"),
+                TemperaturePreference::Fahrenheit => _ = write!(text, "°F"),
+            }
+
+            self.queue_text(text.as_str(), 5000, show_now).await;
+        }
+
         /// Show text on the display. It will always clear what was shown previously.
         ///
         /// Responsible for moving items on the display left (animation) if the position of the last item is at the end of the display.
