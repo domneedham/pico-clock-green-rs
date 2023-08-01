@@ -128,6 +128,8 @@ pub mod display_matrix {
     use embassy_sync::signal::Signal;
     use heapless::String;
 
+    use crate::config::TemperaturePreference;
+
     use super::*;
 
     /// Process the text buffer background task.
@@ -149,16 +151,19 @@ pub mod display_matrix {
         /// A list of upto 32 [characters](Character).
         text: Vec<&'a Character<'a>, 32>,
 
-        /// How long to hold on the dislay for in milliseconds.
+        /// How long to hold on the dislay for in milliseconds once all text is shown.
         ///
         /// *This can be overridden by clearing the display queue so it is not a guarantee it will be on the display for this long*.
-        hold_millis: u64,
+        hold_end_ms: u64,
 
         /// Where to start on the display.
         start_position: usize,
 
         /// Where to end on the display.
         end_position: usize,
+
+        /// Scroll text off the display.
+        scroll_off_display: bool,
     }
 
     /// Named struct for cancel signal.
@@ -179,10 +184,10 @@ pub mod display_matrix {
 
     impl DisplayMatrix {
         /// The first column after the icons.
-        const DISPLAY_OFFSET: usize = 2;
+        pub const DISPLAY_OFFSET: usize = 2;
 
         /// The last column that can be rendered.
-        const LAST_INDEX: usize = 24;
+        pub const LAST_INDEX: usize = 24;
 
         /// Clear the entire display. Includes icons.
         ///
@@ -196,20 +201,6 @@ pub mod display_matrix {
             }
 
             self.0.replace(cs, [[0; 32]; 8]);
-        }
-
-        /// Fill the entire display. Includes icons.
-        ///
-        /// # Arguments
-        ///
-        /// * `cs` - The critical section to access the display matrix.
-        /// * `remove_queue` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
-        pub fn fill_all(&self, cs: CriticalSection, remove_queue: bool) {
-            if remove_queue {
-                Self::cancel_and_remove_queue();
-            }
-
-            self.0.replace(cs, [[1; 32]; 8]);
         }
 
         /// Clear the display. Does not include icons.
@@ -242,9 +233,16 @@ pub mod display_matrix {
         /// # Arguments
         ///
         /// * `text` - The text to show on the display.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
-        pub async fn queue_text(&self, text: &str, hold_duration_millis: u64, show_now: bool) {
+        /// * `scroll_off_display` - Set true if you want the text to scroll off the display.
+        pub async fn queue_text(
+            &self,
+            text: &str,
+            hold_end_ms: u64,
+            show_now: bool,
+            scroll_off_display: bool,
+        ) {
             if show_now {
                 Self::cancel_and_remove_queue()
             }
@@ -269,9 +267,10 @@ pub mod display_matrix {
 
             let buf = TextBufferItem {
                 text: chars,
-                hold_millis: hold_duration_millis,
+                hold_end_ms,
                 start_position: Self::DISPLAY_OFFSET,
                 end_position: Self::LAST_INDEX,
+                scroll_off_display,
             };
 
             TEXT_BUFFER.send(buf).await;
@@ -288,13 +287,13 @@ pub mod display_matrix {
         ///
         /// * `start_position` - Where to start showing the text from.
         /// * `text` - The text to show on the display.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         pub async fn queue_text_from(
             &self,
             start_position: usize,
             text: &str,
-            hold_duration_millis: u64,
+            hold_end_ms: u64,
             show_now: bool,
         ) {
             if show_now {
@@ -321,9 +320,10 @@ pub mod display_matrix {
 
             let buf = TextBufferItem {
                 text: chars,
-                hold_millis: hold_duration_millis,
+                hold_end_ms,
                 start_position,
                 end_position: Self::LAST_INDEX,
+                scroll_off_display: false,
             };
 
             TEXT_BUFFER.send(buf).await;
@@ -340,13 +340,13 @@ pub mod display_matrix {
         ///
         /// * `end_position` - Where to end showing the text.
         /// * `text` - The text to show on the display.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         pub async fn queue_text_to(
             &self,
             end_position: usize,
             text: &str,
-            hold_duration_millis: u64,
+            hold_end_ms: u64,
             show_now: bool,
         ) {
             if show_now {
@@ -373,9 +373,10 @@ pub mod display_matrix {
 
             let buf = TextBufferItem {
                 text: chars,
-                hold_millis: hold_duration_millis,
+                hold_end_ms,
                 start_position: Self::DISPLAY_OFFSET,
                 end_position,
+                scroll_off_display: false,
             };
 
             TEXT_BUFFER.send(buf).await;
@@ -391,21 +392,23 @@ pub mod display_matrix {
         ///
         /// * `left` - What to show on the left side of the `:`.
         /// * `right` - What to show on the right side of the `:`.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        /// * `scroll_off_display` - Set true if you want the text to scroll off the display.
         ///
         /// # Example
         ///
         /// ```rust
-        /// DISPLAY_MATRIX.queue_time(10, 30, 1000, false).await; // will render as 10:30 for at least 1 second.
-        /// DISPLAY_MATRIX.queue_time(5, 5, 1000, false).await; // will render as 05:05 for at least 1 second.
+        /// DISPLAY_MATRIX.queue_time(10, 30, 1000, false, false).await; // will render as 10:30 for at least 1 second.
+        /// DISPLAY_MATRIX.queue_time(5, 5, 1000, false, true).await; // will render as 05:05 for at least 1 second, then scroll all text off the display.
         /// ```
         pub async fn queue_time(
             &self,
             left: u32,
             right: u32,
-            hold_duration_millis: u64,
+            hold_end_ms: u64,
             show_now: bool,
+            scroll_off_display: bool,
         ) {
             let mut time = String::<8>::new();
 
@@ -423,7 +426,7 @@ pub mod display_matrix {
                 _ = write!(time, "{right}");
             }
 
-            self.queue_text(time.as_str(), hold_duration_millis, show_now)
+            self.queue_text(time.as_str(), hold_end_ms, show_now, scroll_off_display)
                 .await;
         }
 
@@ -436,7 +439,7 @@ pub mod display_matrix {
         /// # Arguments
         ///
         /// * `right` - What to show on the right side of the `:`.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         ///
         /// # Example
@@ -448,7 +451,7 @@ pub mod display_matrix {
         pub async fn queue_time_left_side_blink(
             &self,
             right: u32,
-            hold_duration_millis: u64,
+            hold_end_ms: u64,
             show_now: bool,
         ) {
             let mut time = String::<8>::new();
@@ -461,7 +464,7 @@ pub mod display_matrix {
                 _ = write!(time, "{right}");
             }
 
-            self.queue_text_from(12, time.as_str(), hold_duration_millis, show_now)
+            self.queue_text_from(12, time.as_str(), hold_end_ms, show_now)
                 .await;
         }
 
@@ -474,7 +477,7 @@ pub mod display_matrix {
         /// # Arguments
         ///
         /// * `left` - What to show on the right side of the `:`.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         ///
         /// # Example
@@ -486,7 +489,7 @@ pub mod display_matrix {
         pub async fn queue_time_right_side_blink(
             &self,
             left: u32,
-            hold_duration_millis: u64,
+            hold_end_ms: u64,
             show_now: bool,
         ) {
             let mut time = String::<8>::new();
@@ -499,7 +502,7 @@ pub mod display_matrix {
 
             _ = write!(time, ":");
 
-            self.queue_text_to(13, time.as_str(), hold_duration_millis, show_now)
+            self.queue_text_to(13, time.as_str(), hold_end_ms, show_now)
                 .await;
         }
 
@@ -510,7 +513,7 @@ pub mod display_matrix {
         /// # Arguments
         ///
         /// * `year` - What year to show.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         ///
         /// # Example
@@ -518,12 +521,12 @@ pub mod display_matrix {
         /// ```rust
         /// DISPLAY_MATRIX.queue_year(2023, 1000, false).await; // will render as 2023 for at least 1 second.
         /// ```
-        pub async fn queue_year(&self, year: i32, hold_duration_millis: u64, show_now: bool) {
+        pub async fn queue_year(&self, year: i32, hold_end_ms: u64, show_now: bool) {
             let mut text: String<8> = String::<8>::new();
 
             _ = write!(text, "{year}");
 
-            self.queue_text(text.as_str(), hold_duration_millis, show_now)
+            self.queue_text(text.as_str(), hold_end_ms, show_now, false)
                 .await;
         }
 
@@ -537,7 +540,7 @@ pub mod display_matrix {
         ///
         /// * `left` - What to show on the left side of the `/`.
         /// * `right` - What to show on the right side of the `/`.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         ///
         /// # Example
@@ -546,13 +549,7 @@ pub mod display_matrix {
         /// DISPLAY_MATRIX.queue_date(14, 12, 1000, false).await; // will render as 14:12 for at least 1 second.
         /// DISPLAY_MATRIX.queue_date(1, 12, 1000, false).await; // will render as 01:12 for at least 1 second.
         /// ```
-        pub async fn queue_date(
-            &self,
-            left: u32,
-            right: u32,
-            hold_duration_millis: u64,
-            show_now: bool,
-        ) {
+        pub async fn queue_date(&self, left: u32, right: u32, hold_end_ms: u64, show_now: bool) {
             let mut date = String::<8>::new();
 
             if left < 10 {
@@ -569,7 +566,7 @@ pub mod display_matrix {
                 _ = write!(date, "{right}");
             }
 
-            self.queue_text(date.as_str(), hold_duration_millis, show_now)
+            self.queue_text(date.as_str(), hold_end_ms, show_now, false)
                 .await;
         }
 
@@ -582,7 +579,7 @@ pub mod display_matrix {
         /// # Arguments
         ///
         /// * `right` - What to show on the right side of the `/`.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         ///
         /// # Example
@@ -593,7 +590,7 @@ pub mod display_matrix {
         pub async fn queue_date_left_side_blink(
             &self,
             right: u32,
-            hold_duration_millis: u64,
+            hold_end_ms: u64,
             show_now: bool,
         ) {
             let mut time = String::<8>::new();
@@ -606,7 +603,7 @@ pub mod display_matrix {
                 _ = write!(time, "{right}");
             }
 
-            self.queue_text_from(12, time.as_str(), hold_duration_millis, show_now)
+            self.queue_text_from(12, time.as_str(), hold_end_ms, show_now)
                 .await;
         }
 
@@ -619,7 +616,7 @@ pub mod display_matrix {
         /// # Arguments
         ///
         /// * `left` - What to show on the left side of the `/`.
-        /// * `hold_duration_millis` - Minimum period to show the text for.
+        /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         ///
         /// # Example
@@ -630,7 +627,7 @@ pub mod display_matrix {
         pub async fn queue_date_right_side_blink(
             &self,
             left: u32,
-            hold_duration_millis: u64,
+            hold_end_ms: u64,
             show_now: bool,
         ) {
             let mut time = String::<8>::new();
@@ -643,8 +640,95 @@ pub mod display_matrix {
 
             _ = write!(time, "/");
 
-            self.queue_text_to(13, time.as_str(), hold_duration_millis, show_now)
+            self.queue_text_to(13, time.as_str(), hold_end_ms, show_now)
                 .await;
+        }
+
+        /// Queue the temperature into the text buffer. Will append to the queue.
+        ///
+        /// Will automatically add the appropriate temp symbol.
+        ///
+        /// # Arguments
+        ///
+        /// * `temp` - The temperature to show.
+        /// * `pref` - What the temperature reporting preference is.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        /// * `scroll_off_display` - Set true if you want the text to scroll off the display.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_temperature(25, TemperaturePreference::Celcius, false).await; // will render as 20°C.
+        /// DISPLAY_MATRIX.queue_temperature(50, TemperaturePreference::Fahrenheit, true).await; // will render as 50°F and scroll off the display.
+        pub async fn queue_temperature(
+            &self,
+            temp: f32,
+            pref: TemperaturePreference,
+            show_now: bool,
+            scroll_off_display: bool,
+        ) {
+            let mut text = String::<8>::new();
+
+            _ = write!(text, "{:.0}", temp);
+
+            match pref {
+                TemperaturePreference::Celcius => _ = write!(text, "°C"),
+                TemperaturePreference::Fahrenheit => _ = write!(text, "°F"),
+            }
+
+            self.queue_text(text.as_str(), 2500, show_now, scroll_off_display)
+                .await;
+        }
+
+        /// Queue the time and temperature into the text buffer. Will append to the queue.
+        ///
+        /// Will scroll the entire text base until it is empty.
+        ///
+        /// # Arguments
+        ///
+        /// * `hour` - The hour to show.
+        /// * `min` - The minute to show.
+        /// * `temp` - The temperature to show.
+        /// * `pref` - What the temperature reporting preference is.
+        /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// DISPLAY_MATRIX.queue_time_temperature(22, 10, 25, TemperaturePreference::Celcius, false).await; // will render as 22:10  20°C and scroll off the display.
+        /// DISPLAY_MATRIX.queue_time_temperature(6, 30, 50, TemperaturePreference::Fahrenheit, true).await; // will render as 06:30  50°F and scroll off the display.
+        pub async fn queue_time_temperature(
+            &self,
+            hour: u32,
+            min: u32,
+            temp: f32,
+            pref: TemperaturePreference,
+            show_now: bool,
+        ) {
+            let mut text = String::<16>::new();
+
+            if hour < 10 {
+                _ = write!(text, "0{hour}");
+            } else {
+                _ = write!(text, "{hour}");
+            }
+
+            _ = write!(text, ":");
+
+            if min < 10 {
+                _ = write!(text, "0{min}");
+            } else {
+                _ = write!(text, "{min}");
+            }
+
+            _ = write!(text, "  {:.0}", temp);
+
+            match pref {
+                TemperaturePreference::Celcius => _ = write!(text, "°C"),
+                TemperaturePreference::Fahrenheit => _ = write!(text, "°F"),
+            }
+
+            self.queue_text(text.as_str(), 0, show_now, true).await;
         }
 
         /// Show text on the display. It will always clear what was shown previously.
@@ -681,7 +765,15 @@ pub mod display_matrix {
                 }
             }
 
-            Timer::after(Duration::from_millis(item.hold_millis)).await;
+            Timer::after(Duration::from_millis(item.hold_end_ms)).await;
+
+            if item.scroll_off_display {
+                while pos > Self::DISPLAY_OFFSET {
+                    self.shift_text_left(false);
+                    Timer::after(Duration::from_millis(300)).await;
+                    pos -= 1;
+                }
+            }
         }
 
         /// Show an individual [character](Character) at the given position.
@@ -800,6 +892,20 @@ pub mod display_matrix {
                 Weekday::Sun => {
                     self.hide_icon("Sat");
                     self.show_icon("Sun");
+                }
+            }
+        }
+
+        /// Show the correct temperature preference icon.
+        pub fn show_temperature_icon(&self, pref: TemperaturePreference) {
+            match pref {
+                TemperaturePreference::Celcius => {
+                    self.hide_icon("°F");
+                    self.show_icon("°C");
+                }
+                TemperaturePreference::Fahrenheit => {
+                    self.hide_icon("°C");
+                    self.show_icon("°F");
                 }
             }
         }

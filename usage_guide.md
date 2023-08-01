@@ -32,7 +32,13 @@ Do nothing.
 
 ### Middle Button
 
-Do nothing.
+#### Short Press
+
+Show the current temperature.
+
+#### Long Press
+
+Switch the temperature unit.
 
 ### Bottom Button
 

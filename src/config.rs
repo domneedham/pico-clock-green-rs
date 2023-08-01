@@ -2,16 +2,36 @@ use core::cell::RefCell;
 
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
 
+/// Temperature preference representation.
+#[derive(Copy, Clone)]
+pub enum TemperaturePreference {
+    /// Celcius.
+    Celcius,
+
+    /// Fahrenheit.
+    Fahrenheit,
+}
+
 /// Manage active configuration.
 pub struct Config {
     /// Whether the clock should beep on the hour.
     hourly_ring: bool,
+
+    /// The users temperature reporting preference.
+    temp_pref: TemperaturePreference,
+
+    /// Whether the clock should auto scroll and show the temperature.
+    auto_scroll_temp: bool,
 }
 
 impl Config {
     /// Create a new default config.
     pub const fn new() -> Self {
-        Self { hourly_ring: false }
+        Self {
+            hourly_ring: false,
+            temp_pref: TemperaturePreference::Celcius,
+            auto_scroll_temp: true,
+        }
     }
 
     /// Get the hourly ring state.
@@ -22,6 +42,38 @@ impl Config {
     /// Set the hourly ring state.
     pub fn set_hourly_ring(&mut self, new_state: bool) {
         self.hourly_ring = new_state;
+    }
+
+    /// Get the users temperature preference.
+    pub fn get_temperature_preference(&self) -> TemperaturePreference {
+        self.temp_pref
+    }
+
+    /// Set the users temperature preference.
+    pub fn set_temperature_preference(&mut self, new_state: TemperaturePreference) {
+        self.temp_pref = new_state;
+    }
+
+    /// Toggle the users temperature preference.
+    pub fn toggle_temperature_preference(&mut self) {
+        match self.get_temperature_preference() {
+            TemperaturePreference::Celcius => {
+                self.set_temperature_preference(TemperaturePreference::Fahrenheit)
+            }
+            TemperaturePreference::Fahrenheit => {
+                self.set_temperature_preference(TemperaturePreference::Celcius)
+            }
+        }
+    }
+
+    /// Get the auto scroll temperature state.
+    pub fn get_auto_scroll_temp(&self) -> bool {
+        self.auto_scroll_temp
+    }
+
+    /// Set the auto scroll temperature state.
+    pub fn set_auto_scroll_temp(&mut self, new_state: bool) {
+        self.auto_scroll_temp = new_state;
     }
 }
 

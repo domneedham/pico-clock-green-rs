@@ -210,21 +210,21 @@ impl AppController {
         match self.active_app {
             Apps::Clock => {
                 DISPLAY_MATRIX
-                    .queue_text(self.pomodoro_app.get_name(), 1000, true)
+                    .queue_text(self.pomodoro_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Pomodoro;
             }
             Apps::Pomodoro => {
                 DISPLAY_MATRIX
-                    .queue_text(self.settings_app.get_name(), 1000, true)
+                    .queue_text(self.settings_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Settings;
             }
             Apps::Settings => {
                 DISPLAY_MATRIX
-                    .queue_text(self.clock_app.get_name(), 1000, true)
+                    .queue_text(self.clock_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Clock;
@@ -237,21 +237,21 @@ impl AppController {
         match self.active_app {
             Apps::Clock => {
                 DISPLAY_MATRIX
-                    .queue_text(self.settings_app.get_name(), 1000, true)
+                    .queue_text(self.settings_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Settings;
             }
             Apps::Pomodoro => {
                 DISPLAY_MATRIX
-                    .queue_text(self.clock_app.get_name(), 1000, true)
+                    .queue_text(self.clock_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Clock;
             }
             Apps::Settings => {
                 DISPLAY_MATRIX
-                    .queue_text(self.pomodoro_app.get_name(), 1000, true)
+                    .queue_text(self.pomodoro_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Pomodoro;

@@ -7,10 +7,10 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
-    config,
+    config::{self},
     display::display_matrix::DISPLAY_MATRIX,
     rtc::{self},
-    speaker,
+    speaker, temperature,
 };
 
 /// Channel for firing events of when tasks should be stopped.
@@ -41,25 +41,33 @@ impl App for ClockApp {
         self.cancel_clock();
     }
 
-    async fn button_one_short_press(&mut self, spawner: Spawner) {
-        self.cancel_clock();
-        DISPLAY_MATRIX
-            .queue_text("CLOCK INTERRUPT", 1000, true)
-            .await;
-        self.start_clock(spawner).await;
+    async fn button_one_short_press(&mut self, _: Spawner) {}
+
+    async fn button_two_press(&mut self, press: ButtonPress, _: Spawner) {
+        match press {
+            ButtonPress::ShortPress => {
+                show_temperature().await;
+                let datetime = rtc::get_datetime().await;
+                show_time(datetime.hour(), datetime.minute()).await;
+            }
+            ButtonPress::LongPress => {
+                config::CONFIG
+                    .lock()
+                    .await
+                    .borrow_mut()
+                    .toggle_temperature_preference();
+
+                let temp_pref = config::CONFIG
+                    .lock()
+                    .await
+                    .borrow()
+                    .get_temperature_preference();
+                DISPLAY_MATRIX.show_temperature_icon(temp_pref);
+            }
+        }
     }
 
-    async fn button_two_press(&mut self, _: ButtonPress, _: Spawner) {
-        critical_section::with(|cs| {
-            DISPLAY_MATRIX.clear_all(cs, true);
-        });
-    }
-
-    async fn button_three_press(&mut self, _: ButtonPress, _: Spawner) {
-        critical_section::with(|cs| {
-            DISPLAY_MATRIX.fill_all(cs, true);
-        });
-    }
+    async fn button_three_press(&mut self, _: ButtonPress, _: Spawner) {}
 }
 
 impl ClockApp {
@@ -96,7 +104,7 @@ async fn clock() {
     let mut last_day = datetime.weekday();
 
     DISPLAY_MATRIX
-        .queue_time(last_hour, last_min, 1000, false)
+        .queue_time(last_hour, last_min, 1000, false, false)
         .await;
 
     if last_hour >= 12 {
@@ -114,6 +122,14 @@ async fn clock() {
         DISPLAY_MATRIX.show_icon("Hourly");
     }
 
+    let should_scroll_temp = config::CONFIG.lock().await.borrow().get_auto_scroll_temp();
+    if should_scroll_temp {
+        DISPLAY_MATRIX.show_icon("MoveOn");
+    }
+
+    let temp_pref = temperature::get_temperature_preference().await;
+    DISPLAY_MATRIX.show_temperature_icon(temp_pref);
+
     loop {
         let res = select(sub.next_message(), Timer::after(Duration::from_secs(1))).await;
 
@@ -125,7 +141,7 @@ async fn clock() {
                 let hour = datetime.hour();
                 let min = datetime.minute();
                 if hour != last_hour || min != last_min {
-                    DISPLAY_MATRIX.queue_time(hour, min, 1000, false).await;
+                    show_time(hour, min).await;
 
                     if hour >= 12 {
                         DISPLAY_MATRIX.hide_icon("AM");
@@ -148,7 +164,34 @@ async fn clock() {
                     DISPLAY_MATRIX.show_day_icon(day);
                     last_day = day;
                 }
+
+                let second = datetime.second();
+                if second == 25 && should_scroll_temp {
+                    let temp_pref = temperature::get_temperature_preference().await;
+                    let temp = temperature::get_temperature_off_preference().await;
+                    DISPLAY_MATRIX
+                        .queue_time_temperature(hour, min, temp, temp_pref, false)
+                        .await;
+                    show_time(hour, min).await;
+                }
             }
         }
     }
+}
+
+/// Show the temperature.
+async fn show_temperature() {
+    let temp_pref = temperature::get_temperature_preference().await;
+    let temp = temperature::get_temperature_off_preference().await;
+    // show temperature (holds for 5 seconds) and then show time again
+    DISPLAY_MATRIX
+        .queue_temperature(temp, temp_pref, false, false)
+        .await;
+}
+
+/// Show the time.
+async fn show_time(hour: u32, minute: u32) {
+    DISPLAY_MATRIX
+        .queue_time(hour, minute, 1000, false, false)
+        .await;
 }
