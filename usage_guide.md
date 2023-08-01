@@ -86,6 +86,48 @@ This will decrement the number of minutes by 1.
 
 This reset the timer to 30 minutes.
 
+## Stopwatch
+
+The stopwatch is a timer that can currently count up from 0 to no more than 60.
+
+When the stopwatch is running, no configuration changes can be made. However, before it is started, when it is paused or when it is completed, you are in "configuration" mode.
+
+### Top Button (Stopwatch Running)
+
+This will pause the timer.
+
+### Top Button (In Configuration)
+
+This will start the timer.
+
+### Middle Button (Stopwatch Running)
+
+This will do nothing.
+
+### Middle Button (In Configuration)
+
+#### Short press
+
+This will do nothing.
+
+#### Long press
+
+This reset the stopwatch to 0 minutes.
+
+### Bottom Button (Stopwatch Running)
+
+This will do nothing.
+
+### Bottom Button (In Configuration)
+
+#### Short press
+
+This will do nothing.
+
+#### Long press
+
+This reset the stopwatch to 0 minutes.
+
 ## Settings
 
 The settings app is where all configuration for the clock is done. You will have to go through each setting to complete the journey, though you can exit early by going to the app switcher (just make sure you have completed and gone past the item you wanted to change)

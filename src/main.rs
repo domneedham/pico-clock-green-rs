@@ -38,6 +38,9 @@ mod settings;
 /// Use speaker module.
 mod speaker;
 
+/// Use stopwatch module.
+mod stopwatch;
+
 use crate::display::{Display, DisplayPins};
 
 use app::AppController;
@@ -53,6 +56,7 @@ use embassy_rp::{
 use pomodoro::PomodoroApp;
 use rtc::Ds3231;
 use settings::SettingsApp;
+use stopwatch::StopwatchApp;
 use {defmt as _, defmt_rtt as _, panic_probe as _};
 
 /// Executor for core 0.
@@ -142,9 +146,16 @@ async fn main_core(
 
     let clock_app = ClockApp::new();
     let pomodoro_app = PomodoroApp::new();
+    let stopwatch_app = StopwatchApp::new();
     let settings_app = SettingsApp::new();
 
-    let mut app_controller = AppController::new(spawner, clock_app, pomodoro_app, settings_app);
+    let mut app_controller = AppController::new(
+        spawner,
+        clock_app,
+        pomodoro_app,
+        stopwatch_app,
+        settings_app,
+    );
     app_controller.run_forever().await;
 }
 
