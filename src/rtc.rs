@@ -201,3 +201,20 @@ const MONTH_TABLE: [(u32, u32); 12] = [
     (11, 30),
     (12, 31),
 ];
+
+/// All temperature related functionality.
+pub mod temperature {
+    use super::*;
+
+    /// Get the current temperature from RTC.
+    pub async fn get_temperature() -> f32 {
+        RTC.lock()
+            .await
+            .borrow_mut()
+            .as_mut()
+            .unwrap()
+            .0
+            .temperature()
+            .unwrap()
+    }
+}

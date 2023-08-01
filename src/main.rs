@@ -29,6 +29,9 @@ mod pomodoro;
 /// Use rtc module.
 mod rtc;
 
+/// Use temperature module.
+mod temperature;
+
 /// Use settings module.
 mod settings;
 

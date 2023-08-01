@@ -1,3 +1,4 @@
+use defmt::info;
 use ds323x::{Datelike, Timelike};
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either::First, Either::Second};
@@ -10,7 +11,7 @@ use crate::{
     config,
     display::display_matrix::DISPLAY_MATRIX,
     rtc::{self},
-    speaker,
+    speaker, temperature,
 };
 
 /// Channel for firing events of when tasks should be stopped.
@@ -147,6 +148,12 @@ async fn clock() {
                 if day != last_day {
                     DISPLAY_MATRIX.show_day_icon(day);
                     last_day = day;
+                }
+
+                let second = datetime.second();
+                if second % 5 == 0 {
+                    let temp = temperature::get_temperature_off_preference().await;
+                    info!("Temp: {}", temp);
                 }
             }
         }
