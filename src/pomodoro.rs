@@ -157,7 +157,13 @@ impl App for PomodoroApp {
                     minutes += 1;
                 }
             }
-            ButtonPress::Double => {}
+            ButtonPress::Double => {
+                if minutes > 55 {
+                    minutes = 1;
+                } else {
+                    minutes += 5;
+                }
+            }
         }
 
         set_time(minutes, seconds).await;
@@ -183,7 +189,13 @@ impl App for PomodoroApp {
                     minutes -= 1;
                 }
             }
-            ButtonPress::Double => {}
+            ButtonPress::Double => {
+                if minutes < 5 {
+                    minutes = 60;
+                } else {
+                    minutes -= 5;
+                }
+            }
         }
 
         set_time(minutes, seconds).await;
