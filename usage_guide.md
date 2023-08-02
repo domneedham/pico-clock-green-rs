@@ -40,7 +40,7 @@ Show the current temperature.
 
 Switch the temperature unit.
 
-#### Double Press
+#### Double Press
 
 This will do nothing.
 
