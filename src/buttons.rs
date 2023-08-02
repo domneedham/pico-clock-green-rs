@@ -7,13 +7,13 @@ use embassy_time::{Duration, Timer};
 /// Type of button press made.
 pub enum ButtonPress {
     /// When the button click duration is <=500ms.
-    ShortPress,
+    Short,
 
     /// When the button click duration is >500ms.
-    LongPress,
+    Long,
 
     /// When the button click duration is <=500ms and a second click happens in the next 300ms.
-    DoublePress,
+    Double,
 }
 
 /// Signal for when the top button has been pressed.
@@ -101,6 +101,7 @@ pub async fn button_three_task(mut button: Input<'static, PIN_15>) -> ! {
 }
 
 /// Determine the type of press performed on the button.
+#[allow(clippy::needless_pass_by_ref_mut)] // needs to be mutable to use wait_for_*()
 async fn button_pressed<T>(button: &mut Input<'_, T>) -> ButtonPress
 where
     T: embassy_rp::gpio::Pin,
@@ -129,22 +130,19 @@ where
                 // button is released before 250ms
                 Either::First(_) => {
                     info!("Double press");
-                    // BUTTON_ONE_PRESS.signal(ButtonPress::DoublePress);
-                    return ButtonPress::DoublePress;
+                    ButtonPress::Double
                 }
                 // 250ms passed by
                 Either::Second(_) => {
                     info!("Short press");
-                    // BUTTON_ONE_PRESS.signal(ButtonPress::ShortPress);
-                    return ButtonPress::ShortPress;
+                    ButtonPress::Short
                 }
             }
         }
         // 500ms passed by
         Either::Second(_) => {
             info!("Long press");
-            // BUTTON_ONE_PRESS.signal(ButtonPress::LongPress);
-            return ButtonPress::LongPress;
+            ButtonPress::Long
         }
     }
 }

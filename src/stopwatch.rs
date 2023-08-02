@@ -146,12 +146,12 @@ impl App for StopwatchApp {
         let (mut minutes, mut seconds) = get_time().await;
 
         match press {
-            ButtonPress::LongPress => {
+            ButtonPress::Long => {
                 minutes = 0;
                 seconds = 0;
             }
-            ButtonPress::ShortPress => {}
-            ButtonPress::DoublePress => {}
+            ButtonPress::Short => {}
+            ButtonPress::Double => {}
         }
 
         set_time(minutes, seconds).await;
@@ -166,12 +166,12 @@ impl App for StopwatchApp {
         let (mut minutes, mut seconds) = get_time().await;
 
         match press {
-            ButtonPress::LongPress => {
+            ButtonPress::Long => {
                 minutes = 0;
                 seconds = 0;
             }
-            ButtonPress::ShortPress => {}
-            ButtonPress::DoublePress => {}
+            ButtonPress::Short => {}
+            ButtonPress::Double => {}
         }
 
         set_time(minutes, seconds).await;
