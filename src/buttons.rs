@@ -5,7 +5,6 @@ use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, signal::Signal};
 use embassy_time::{Duration, Timer};
 
 /// Type of button press made.
-/// Double clicks are not yet supported but planned.
 pub enum ButtonPress {
     /// When the button click duration is <=500ms.
     ShortPress,
