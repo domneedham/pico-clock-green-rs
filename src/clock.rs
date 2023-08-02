@@ -64,6 +64,7 @@ impl App for ClockApp {
                     .get_temperature_preference();
                 DISPLAY_MATRIX.show_temperature_icon(temp_pref);
             }
+            ButtonPress::DoublePress => {}
         }
     }
 

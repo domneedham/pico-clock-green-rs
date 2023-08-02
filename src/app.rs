@@ -155,6 +155,7 @@ impl AppController {
                 }
             }
             ButtonPress::LongPress => self.show_app_picker().await,
+            ButtonPress::DoublePress => {}
         };
     }
 

@@ -151,6 +151,7 @@ impl App for StopwatchApp {
                 seconds = 0;
             }
             ButtonPress::ShortPress => {}
+            ButtonPress::DoublePress => todo!(),
         }
 
         set_time(minutes, seconds).await;
@@ -170,6 +171,7 @@ impl App for StopwatchApp {
                 seconds = 0;
             }
             ButtonPress::ShortPress => {}
+            ButtonPress::DoublePress => todo!(),
         }
 
         set_time(minutes, seconds).await;

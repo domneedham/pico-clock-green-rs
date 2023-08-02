@@ -157,6 +157,7 @@ impl App for PomodoroApp {
                     minutes += 1;
                 }
             }
+            ButtonPress::DoublePress => todo!(),
         }
 
         set_time(minutes, seconds).await;
@@ -182,6 +183,7 @@ impl App for PomodoroApp {
                     minutes -= 1;
                 }
             }
+            ButtonPress::DoublePress => todo!(),
         }
 
         set_time(minutes, seconds).await;
