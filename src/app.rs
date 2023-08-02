@@ -134,7 +134,7 @@ impl AppController {
     /// Handle the top button press when signaled from the button module.
     pub async fn button_one_press(&mut self, press: ButtonPress) {
         match press {
-            ButtonPress::ShortPress => {
+            ButtonPress::Short => {
                 if self.showing_app_picker {
                     self.app_selected().await;
                 } else {
@@ -154,7 +154,8 @@ impl AppController {
                     }
                 }
             }
-            ButtonPress::LongPress => self.show_app_picker().await,
+            ButtonPress::Long => self.show_app_picker().await,
+            ButtonPress::Double => {}
         };
     }
 

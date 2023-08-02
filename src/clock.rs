@@ -45,12 +45,12 @@ impl App for ClockApp {
 
     async fn button_two_press(&mut self, press: ButtonPress, _: Spawner) {
         match press {
-            ButtonPress::ShortPress => {
+            ButtonPress::Short => {
                 show_temperature().await;
                 let datetime = rtc::get_datetime().await;
                 show_time(datetime.hour(), datetime.minute()).await;
             }
-            ButtonPress::LongPress => {
+            ButtonPress::Long => {
                 config::CONFIG
                     .lock()
                     .await
@@ -64,6 +64,7 @@ impl App for ClockApp {
                     .get_temperature_preference();
                 DISPLAY_MATRIX.show_temperature_icon(temp_pref);
             }
+            ButtonPress::Double => {}
         }
     }
 

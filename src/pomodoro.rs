@@ -146,15 +146,22 @@ impl App for PomodoroApp {
         let (mut minutes, mut seconds) = get_time().await;
 
         match press {
-            ButtonPress::LongPress => {
+            ButtonPress::Long => {
                 minutes = 30;
                 seconds = 0;
             }
-            ButtonPress::ShortPress => {
+            ButtonPress::Short => {
                 if minutes == 60 {
                     minutes = 1;
                 } else {
                     minutes += 1;
+                }
+            }
+            ButtonPress::Double => {
+                if minutes > 55 {
+                    minutes = 1;
+                } else {
+                    minutes += 5;
                 }
             }
         }
@@ -171,15 +178,22 @@ impl App for PomodoroApp {
         let (mut minutes, mut seconds) = get_time().await;
 
         match press {
-            ButtonPress::LongPress => {
+            ButtonPress::Long => {
                 minutes = 30;
                 seconds = 0;
             }
-            ButtonPress::ShortPress => {
+            ButtonPress::Short => {
                 if minutes == 1 {
                     minutes = 60;
                 } else {
                     minutes -= 1;
+                }
+            }
+            ButtonPress::Double => {
+                if minutes < 5 {
+                    minutes = 60;
+                } else {
+                    minutes -= 5;
                 }
             }
         }

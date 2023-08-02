@@ -8,7 +8,7 @@ This guide does not reflect the offical Waveshare C implementation guide. There 
 
 The app switcher is a list of all apps that can be selected. The app name will show on the screen and you can use the buttons as outlined below to navigate the menu.
 
-You can load the app switcher by performing a long press on the top button. This will happen no matter what else you are doing with the clock.
+You can load the app switcher by performing a long press on the top button. This will happen no matter what else you are doing with the clock. Double clicks are not supported on the top button as the app switcher receives the event and swallows it.
 
 ### Top Button
 
@@ -28,7 +28,7 @@ The clock is the main app and will show the the current time as configured. It i
 
 ### Top Button
 
-Do nothing.
+This will do nothing.
 
 ### Middle Button
 
@@ -39,6 +39,10 @@ Show the current temperature.
 #### Long Press
 
 Switch the temperature unit.
+
+#### Double Press
+
+This will do nothing.
 
 ### Bottom Button
 
@@ -64,13 +68,17 @@ This will do nothing.
 
 ### Middle Button (In Configuration)
 
-#### Short press
+#### Short Press
 
 This will increment the number of minutes by 1.
 
-#### Long press
+#### Long Press
 
 This reset the timer to 30 minutes.
+
+#### Double Press
+
+This will increment the number of minutes by 5.
 
 ### Bottom Button (Timer Running)
 
@@ -78,13 +86,17 @@ This will do nothing.
 
 ### Bottom Button (In Configuration)
 
-#### Short press
+#### Short Press
 
 This will decrement the number of minutes by 1.
 
-#### Long press
+#### Long Press
 
 This reset the timer to 30 minutes.
+
+#### Double Press
+
+This will decrement the number of minutes by 5.
 
 ## Stopwatch
 
@@ -106,13 +118,17 @@ This will do nothing.
 
 ### Middle Button (In Configuration)
 
-#### Short press
+#### Short Press
 
 This will do nothing.
 
-#### Long press
+#### Long Press
 
 This reset the stopwatch to 0 minutes.
+
+#### Double Press
+
+This will do nothing.
 
 ### Bottom Button (Stopwatch Running)
 
@@ -120,13 +136,17 @@ This will do nothing.
 
 ### Bottom Button (In Configuration)
 
-#### Short press
+#### Short Press
 
 This will do nothing.
 
-#### Long press
+#### Long Press
 
 This reset the stopwatch to 0 minutes.
+
+#### Double Press
+
+This will do nothing.
 
 ## Settings
 
