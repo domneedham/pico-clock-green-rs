@@ -8,7 +8,7 @@ This guide does not reflect the offical Waveshare C implementation guide. There 
 
 The app switcher is a list of all apps that can be selected. The app name will show on the screen and you can use the buttons as outlined below to navigate the menu.
 
-You can load the app switcher by performing a long Press on the top button. This will happen no matter what else you are doing with the clock.
+You can load the app switcher by performing a long press on the top button. This will happen no matter what else you are doing with the clock. Double clicks are not supported on the top button as the app switcher receives the event and swallows it.
 
 ### Top Button
 
