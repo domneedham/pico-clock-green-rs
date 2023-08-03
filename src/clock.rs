@@ -64,7 +64,17 @@ impl App for ClockApp {
                     .get_temperature_preference();
                 DISPLAY_MATRIX.show_temperature_icon(temp_pref);
             }
-            ButtonPress::Double => {}
+            ButtonPress::Double => {
+                config::CONFIG
+                    .lock()
+                    .await
+                    .borrow_mut()
+                    .toggle_time_preference();
+
+                let time_pref = config::CONFIG.lock().await.borrow().get_time_preference();
+                let hour = rtc::get_hour().await;
+                DISPLAY_MATRIX.show_time_icon(time_pref, hour);
+            }
         }
     }
 
@@ -108,15 +118,10 @@ async fn clock() {
         .queue_time(last_hour, last_min, 1000, false, false)
         .await;
 
-    if last_hour >= 12 {
-        DISPLAY_MATRIX.hide_icon("AM");
-        DISPLAY_MATRIX.show_icon("PM");
-    } else {
-        DISPLAY_MATRIX.hide_icon("PM");
-        DISPLAY_MATRIX.show_icon("AM");
-    }
-
     DISPLAY_MATRIX.show_day_icon(last_day);
+
+    let time_pref = config::CONFIG.lock().await.borrow().get_time_preference();
+    DISPLAY_MATRIX.show_time_icon(time_pref, last_hour);
 
     let should_hourly_ring = config::CONFIG.lock().await.borrow().get_hourly_ring();
     if should_hourly_ring {
