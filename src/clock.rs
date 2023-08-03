@@ -7,7 +7,7 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
-    config::{self},
+    config::{self, TimePreference},
     display::display_matrix::DISPLAY_MATRIX,
     rtc::{self},
     speaker, temperature,
@@ -72,8 +72,9 @@ impl App for ClockApp {
                     .toggle_time_preference();
 
                 let time_pref = config::CONFIG.lock().await.borrow().get_time_preference();
-                let hour = rtc::get_hour().await;
-                DISPLAY_MATRIX.show_time_icon(time_pref, hour);
+                let datetime = rtc::get_datetime().await;
+                DISPLAY_MATRIX.show_time_icon(time_pref, datetime.hour());
+                show_time(datetime.hour(), datetime.minute()).await;
             }
         }
     }
@@ -149,16 +150,16 @@ async fn clock() {
                 if hour != last_hour || min != last_min {
                     show_time(hour, min).await;
 
-                    if hour >= 12 {
-                        DISPLAY_MATRIX.hide_icon("AM");
-                        DISPLAY_MATRIX.show_icon("PM");
-                    } else {
-                        DISPLAY_MATRIX.hide_icon("PM");
-                        DISPLAY_MATRIX.show_icon("AM");
-                    }
+                    if hour != last_hour {
+                        if hour == 0 || hour == 12 {
+                            let time_pref =
+                                config::CONFIG.lock().await.borrow().get_time_preference();
+                            DISPLAY_MATRIX.show_time_icon(time_pref, hour);
+                        }
 
-                    if hour != last_hour && should_hourly_ring {
-                        speaker::sound(speaker::SoundType::ShortBeep);
+                        if should_hourly_ring {
+                            speaker::sound(speaker::SoundType::ShortBeep);
+                        }
                     }
 
                     last_hour = hour;
@@ -175,6 +176,13 @@ async fn clock() {
                 if second == 25 && should_scroll_temp {
                     let temp_pref = temperature::get_temperature_preference().await;
                     let temp = temperature::get_temperature_off_preference().await;
+
+                    let mut hour = hour;
+                    let pref = config::CONFIG.lock().await.borrow().get_time_preference();
+                    if let TimePreference::Twelve = pref {
+                        hour = convert_24_to_12(hour);
+                    }
+
                     DISPLAY_MATRIX
                         .queue_time_temperature(hour, min, temp, temp_pref, false)
                         .await;
@@ -196,8 +204,43 @@ async fn show_temperature() {
 }
 
 /// Show the time.
-async fn show_time(hour: u32, minute: u32) {
+async fn show_time(mut hour: u32, minute: u32) {
+    let pref = config::CONFIG.lock().await.borrow().get_time_preference();
+
+    if let TimePreference::Twelve = pref {
+        hour = convert_24_to_12(hour);
+    }
+
     DISPLAY_MATRIX
         .queue_time(hour, minute, 1000, false, false)
         .await;
+}
+
+/// Convert 24hr time into 12hr time.
+fn convert_24_to_12(hour: u32) -> u32 {
+    if hour <= 12 {
+        hour
+    } else if hour == 13 {
+        1
+    } else if hour == 14 {
+        2
+    } else if hour == 15 {
+        3
+    } else if hour == 16 {
+        4
+    } else if hour == 17 {
+        5
+    } else if hour == 18 {
+        6
+    } else if hour == 19 {
+        7
+    } else if hour == 20 {
+        8
+    } else if hour == 21 {
+        9
+    } else if hour == 22 {
+        10
+    } else {
+        11
+    }
 }
