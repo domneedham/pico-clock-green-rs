@@ -12,6 +12,16 @@ pub enum TemperaturePreference {
     Fahrenheit,
 }
 
+/// Time preference representation.
+#[derive(Copy, Clone)]
+pub enum TimePreference {
+    /// 12hr.
+    Twelve,
+
+    /// 24hr.
+    TwentyFour,
+}
+
 /// Manage active configuration.
 pub struct Config {
     /// Whether the clock should beep on the hour.
@@ -22,6 +32,9 @@ pub struct Config {
 
     /// Whether the clock should auto scroll and show the temperature.
     auto_scroll_temp: bool,
+
+    /// The users time representation preference.
+    time_pref: TimePreference,
 }
 
 impl Config {
@@ -31,6 +44,7 @@ impl Config {
             hourly_ring: false,
             temp_pref: TemperaturePreference::Celcius,
             auto_scroll_temp: true,
+            time_pref: TimePreference::TwentyFour,
         }
     }
 
@@ -74,6 +88,24 @@ impl Config {
     /// Set the auto scroll temperature state.
     pub fn set_auto_scroll_temp(&mut self, new_state: bool) {
         self.auto_scroll_temp = new_state;
+    }
+
+    /// Get the users temperature preference.
+    pub fn get_time_preference(&self) -> TimePreference {
+        self.time_pref
+    }
+
+    /// Set the users time preference.
+    pub fn set_time_preference(&mut self, new_state: TimePreference) {
+        self.time_pref = new_state;
+    }
+
+    /// Toggle the users time preference.
+    pub fn toggle_time_preference(&mut self) {
+        match self.get_time_preference() {
+            TimePreference::Twelve => self.set_time_preference(TimePreference::TwentyFour),
+            TimePreference::TwentyFour => self.set_time_preference(TimePreference::Twelve),
+        }
     }
 }
 

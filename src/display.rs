@@ -128,7 +128,7 @@ pub mod display_matrix {
     use embassy_sync::signal::Signal;
     use heapless::String;
 
-    use crate::config::TemperaturePreference;
+    use crate::config::{TemperaturePreference, TimePreference};
 
     use super::*;
 
@@ -906,6 +906,25 @@ pub mod display_matrix {
                 TemperaturePreference::Fahrenheit => {
                     self.hide_icon("°C");
                     self.show_icon("°F");
+                }
+            }
+        }
+
+        /// Show the correct temperature preference icon.
+        pub fn show_time_icon(&self, pref: TimePreference, hour: u32) {
+            match pref {
+                TimePreference::Twelve => {
+                    if hour >= 12 {
+                        DISPLAY_MATRIX.hide_icon("AM");
+                        DISPLAY_MATRIX.show_icon("PM");
+                    } else {
+                        DISPLAY_MATRIX.hide_icon("PM");
+                        DISPLAY_MATRIX.show_icon("AM");
+                    }
+                }
+                TimePreference::TwentyFour => {
+                    DISPLAY_MATRIX.hide_icon("AM");
+                    DISPLAY_MATRIX.hide_icon("PM");
                 }
             }
         }
