@@ -12,8 +12,8 @@ use crate::{
 };
 
 use self::configurations::{
-    Configuration, DayConfiguration, HourConfiguration, HourlyRingConfiguration,
-    MinuteConfiguration, MonthConfiguration, YearConfiguration,
+    AutoScrollTempConfiguration, Configuration, DayConfiguration, HourConfiguration,
+    HourlyRingConfiguration, MinuteConfiguration, MonthConfiguration, YearConfiguration,
 };
 
 /// Each of the possible configurations to run through in the settings app.
@@ -35,6 +35,9 @@ enum SettingsConfig {
 
     /// Modify the hourly ring setting.
     HourlyRing,
+
+    /// Modify the auto scrolling of temperature setting.
+    AutoScrollTemp,
 }
 
 /// Each of the possible configurations, but with data so the blink task can be displayed accurately.
@@ -92,6 +95,9 @@ pub struct SettingsApp {
     /// The hourly ring configuration mini app.
     hourly_ring_config: configurations::HourlyRingConfiguration,
 
+    /// The auto scroll temp configuration mini app.
+    auto_scroll_temp_config: configurations::AutoScrollTempConfiguration,
+
     /// The current active mini app being configured.
     active_config: SettingsConfig,
 }
@@ -106,6 +112,7 @@ impl SettingsApp {
             month_config: MonthConfiguration::new(),
             day_config: DayConfiguration::new(),
             hourly_ring_config: HourlyRingConfiguration::new(),
+            auto_scroll_temp_config: AutoScrollTempConfiguration::new(),
             active_config: SettingsConfig::Hour,
         }
     }
@@ -162,6 +169,11 @@ impl App for SettingsApp {
             }
             SettingsConfig::HourlyRing => {
                 self.hourly_ring_config.save().await;
+                self.active_config = SettingsConfig::AutoScrollTemp;
+                self.auto_scroll_temp_config.start().await;
+            }
+            SettingsConfig::AutoScrollTemp => {
+                self.auto_scroll_temp_config.save().await;
                 self.end().await;
             }
         }
@@ -177,6 +189,9 @@ impl App for SettingsApp {
             SettingsConfig::Month => self.month_config.button_two_press(press).await,
             SettingsConfig::Day => self.day_config.button_two_press(press).await,
             SettingsConfig::HourlyRing => self.hourly_ring_config.button_two_press(press).await,
+            SettingsConfig::AutoScrollTemp => {
+                self.auto_scroll_temp_config.button_two_press(press).await
+            }
         }
     }
 
@@ -188,6 +203,9 @@ impl App for SettingsApp {
             SettingsConfig::Month => self.month_config.button_three_press(press).await,
             SettingsConfig::Day => self.day_config.button_three_press(press).await,
             SettingsConfig::HourlyRing => self.hourly_ring_config.button_three_press(press).await,
+            SettingsConfig::AutoScrollTemp => {
+                self.auto_scroll_temp_config.button_three_press(press).await
+            }
         }
     }
 }
@@ -198,7 +216,7 @@ impl SettingsApp {
     /// Stop tasks, show "Done" and then show app switcher after delay.
     async fn end(&mut self) {
         self.stop().await;
-        DISPLAY_MATRIX.queue_text("Done", 2000, true).await;
+        DISPLAY_MATRIX.queue_text("Done", 2000, true, false).await;
         Timer::after(Duration::from_secs(2)).await;
         SHOW_APP_SWITCHER.signal(ShowAppSwitcher);
     }
@@ -218,20 +236,20 @@ async fn blink() {
         match blink_task {
             BlinkTask::None => {}
             BlinkTask::Hour(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, 750, true).await;
+                DISPLAY_MATRIX.queue_time(hour, min, 750, true, false).await;
                 DISPLAY_MATRIX
                     .queue_time_left_side_blink(min, 350, false)
                     .await;
             }
             BlinkTask::Minute(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, 750, true).await;
+                DISPLAY_MATRIX.queue_time(hour, min, 750, true, false).await;
                 DISPLAY_MATRIX
                     .queue_time_right_side_blink(hour, 350, false)
                     .await;
             }
             BlinkTask::Year(year) => {
                 DISPLAY_MATRIX.queue_year(year, 750, true).await;
-                DISPLAY_MATRIX.queue_text(" ", 350, false).await;
+                DISPLAY_MATRIX.queue_text(" ", 350, false, false).await;
             }
             BlinkTask::Month(month, day) => {
                 DISPLAY_MATRIX.queue_date(month, day, 750, true).await;
@@ -290,16 +308,22 @@ mod configurations {
     pub struct HourConfiguration {
         /// The hour being configured.
         hour: u32,
+
+        /// The hour set when starting configuration.
+        starting_hour: u32,
     }
 
     impl Configuration for HourConfiguration {
         async fn start(&mut self) {
             self.hour = rtc::get_hour().await;
+            self.starting_hour = self.hour;
             self.show().await;
         }
 
         async fn save(&mut self) {
-            rtc::set_hour(self.hour).await;
+            if self.hour != self.starting_hour {
+                rtc::set_hour(self.hour).await;
+            }
         }
 
         async fn button_two_press(&mut self, _: ButtonPress) {
@@ -324,7 +348,10 @@ mod configurations {
     impl HourConfiguration {
         /// Create a new hour configuration.
         pub fn new() -> Self {
-            Self { hour: 0 }
+            Self {
+                hour: 0,
+                starting_hour: 0,
+            }
         }
 
         /// Show hour configuration in blink task.
@@ -338,16 +365,22 @@ mod configurations {
     pub struct MinuteConfiguration {
         /// The minute being configured.
         minute: u32,
+
+        /// The minute set when starting configuration.
+        starting_minute: u32,
     }
 
     impl Configuration for MinuteConfiguration {
         async fn start(&mut self) {
             self.minute = rtc::get_minute().await;
+            self.starting_minute = self.minute;
             self.show().await;
         }
 
         async fn save(&mut self) {
-            rtc::set_minute(self.minute).await;
+            if self.minute != self.starting_minute {
+                rtc::set_minute(self.minute).await;
+            }
         }
 
         async fn button_two_press(&mut self, _: ButtonPress) {
@@ -372,7 +405,10 @@ mod configurations {
     impl MinuteConfiguration {
         /// Create a new minute configuration.
         pub fn new() -> Self {
-            Self { minute: 0 }
+            Self {
+                minute: 0,
+                starting_minute: 0,
+            }
         }
 
         /// Show minute configuration in blink task.
@@ -386,16 +422,22 @@ mod configurations {
     pub struct YearConfiguration {
         /// The year being configured.
         year: i32,
+
+        /// The year set when starting configuration.
+        starting_year: i32,
     }
 
     impl Configuration for YearConfiguration {
         async fn start(&mut self) {
             self.year = rtc::get_year().await;
+            self.starting_year = self.year;
             self.show().await;
         }
 
         async fn save(&mut self) {
-            rtc::set_year(self.year).await;
+            if self.year != self.starting_year {
+                rtc::set_year(self.year).await;
+            }
         }
 
         async fn button_two_press(&mut self, _: ButtonPress) {
@@ -420,7 +462,10 @@ mod configurations {
     impl YearConfiguration {
         /// Create a new year configuration.
         pub fn new() -> Self {
-            Self { year: 0 }
+            Self {
+                year: 0,
+                starting_year: 0,
+            }
         }
 
         /// Show year configuration in blink task.
@@ -433,16 +478,22 @@ mod configurations {
     pub struct MonthConfiguration {
         /// The month being configured.
         month: u32,
+
+        /// The month set when starting configuration.
+        starting_month: u32,
     }
 
     impl Configuration for MonthConfiguration {
         async fn start(&mut self) {
             self.month = rtc::get_month().await;
+            self.starting_month = self.month;
             self.show().await;
         }
 
         async fn save(&mut self) {
-            rtc::set_month(self.month).await;
+            if self.month != self.starting_month {
+                rtc::set_month(self.month).await;
+            }
         }
 
         async fn button_two_press(&mut self, _: ButtonPress) {
@@ -467,7 +518,10 @@ mod configurations {
     impl MonthConfiguration {
         /// Create a new month configuration.
         pub fn new() -> Self {
-            Self { month: 0 }
+            Self {
+                month: 0,
+                starting_month: 0,
+            }
         }
 
         /// Show minute configuration in blink task.
@@ -482,6 +536,9 @@ mod configurations {
         /// The day being configured.
         day: u32,
 
+        /// The day set when starting configuration.
+        starting_day: u32,
+
         /// The current month in RTC. This is purely just a reference and should not be mutated.
         month: u32,
     }
@@ -489,12 +546,15 @@ mod configurations {
     impl Configuration for DayConfiguration {
         async fn start(&mut self) {
             self.day = rtc::get_day().await;
+            self.starting_day = self.day;
             self.month = rtc::get_month().await;
             self.show().await;
         }
 
         async fn save(&mut self) {
-            rtc::set_day(self.day).await;
+            if self.day != self.starting_day {
+                rtc::set_day(self.day).await;
+            }
         }
 
         async fn button_two_press(&mut self, _: ButtonPress) {
@@ -519,7 +579,11 @@ mod configurations {
     impl DayConfiguration {
         /// Create a new day configuration.
         pub fn new() -> Self {
-            Self { day: 0, month: 0 }
+            Self {
+                day: 0,
+                starting_day: 0,
+                month: 0,
+            }
         }
 
         /// Show day configuration in blink task.
@@ -532,21 +596,27 @@ mod configurations {
     pub struct HourlyRingConfiguration {
         /// The ring state.
         state: bool,
+
+        /// The state set when starting configuration.
+        starting_state: bool,
     }
 
     impl Configuration for HourlyRingConfiguration {
         async fn start(&mut self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
             self.state = config::CONFIG.lock().await.borrow().get_hourly_ring();
+            self.starting_state = self.state;
             self.show().await;
         }
 
         async fn save(&mut self) {
-            config::CONFIG
-                .lock()
-                .await
-                .borrow_mut()
-                .set_hourly_ring(self.state);
+            if self.state != self.starting_state {
+                config::CONFIG
+                    .lock()
+                    .await
+                    .borrow_mut()
+                    .set_hourly_ring(self.state);
+            }
         }
 
         async fn button_two_press(&mut self, _: ButtonPress) {
@@ -563,7 +633,10 @@ mod configurations {
     impl HourlyRingConfiguration {
         /// Create a new day configuration.
         pub fn new() -> Self {
-            Self { state: false }
+            Self {
+                state: false,
+                starting_state: false,
+            }
         }
 
         /// Show day configuration in blink task.
@@ -576,7 +649,72 @@ mod configurations {
                 _ = write!(text, "Off");
             }
 
-            DISPLAY_MATRIX.queue_text(text.as_str(), 1000, true).await;
+            DISPLAY_MATRIX
+                .queue_text(text.as_str(), 1000, true, false)
+                .await;
+        }
+    }
+
+    /// RTC day configuration.
+    pub struct AutoScrollTempConfiguration {
+        /// The ring state.
+        state: bool,
+
+        /// The state set when starting configuration.
+        starting_state: bool,
+    }
+
+    impl Configuration for AutoScrollTempConfiguration {
+        async fn start(&mut self) {
+            SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
+            self.state = config::CONFIG.lock().await.borrow().get_auto_scroll_temp();
+            self.starting_state = self.state;
+            self.show().await;
+        }
+
+        async fn save(&mut self) {
+            if self.state != self.starting_state {
+                config::CONFIG
+                    .lock()
+                    .await
+                    .borrow_mut()
+                    .set_auto_scroll_temp(self.state);
+            }
+        }
+
+        async fn button_two_press(&mut self, _: ButtonPress) {
+            self.state = !self.state;
+            self.show().await;
+        }
+
+        async fn button_three_press(&mut self, _: ButtonPress) {
+            self.state = !self.state;
+            self.show().await;
+        }
+    }
+
+    impl AutoScrollTempConfiguration {
+        /// Create a new day configuration.
+        pub fn new() -> Self {
+            Self {
+                state: false,
+                starting_state: false,
+            }
+        }
+
+        /// Show day configuration in blink task.
+        async fn show(&self) {
+            let mut text: String<16> = String::new();
+            _ = write!(text, "Scroll temp:");
+            if self.state {
+                _ = write!(text, "On");
+            } else {
+                _ = write!(text, "Off");
+            }
+
+            DISPLAY_MATRIX
+                .queue_text(text.as_str(), 1000, true, false)
+                .await;
         }
     }
 }

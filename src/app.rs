@@ -10,6 +10,7 @@ use crate::{
     display::display_matrix::DISPLAY_MATRIX,
     pomodoro::PomodoroApp,
     settings::SettingsApp,
+    stopwatch::StopwatchApp,
 };
 
 /// Named struct for stopping app spawned tasks.
@@ -52,6 +53,9 @@ enum Apps {
     /// The pomodoro app.
     Pomodoro,
 
+    /// The stopwatch app.
+    Stopwatch,
+
     /// The settings app.
     Settings,
 }
@@ -75,6 +79,9 @@ pub struct AppController {
     /// Pomodoro app.
     pomodoro_app: PomodoroApp,
 
+    /// Stopwatch app.
+    stopwatch_app: StopwatchApp,
+
     /// Settings app.
     settings_app: SettingsApp,
 
@@ -88,6 +95,7 @@ impl AppController {
         spawner: Spawner,
         clock_app: ClockApp,
         pomodoro_app: PomodoroApp,
+        stopwatch_app: StopwatchApp,
         settings_app: SettingsApp,
     ) -> Self {
         Self {
@@ -95,6 +103,7 @@ impl AppController {
             showing_app_picker: false,
             clock_app,
             pomodoro_app,
+            stopwatch_app,
             settings_app,
             spawner,
         }
@@ -125,7 +134,7 @@ impl AppController {
     /// Handle the top button press when signaled from the button module.
     pub async fn button_one_press(&mut self, press: ButtonPress) {
         match press {
-            ButtonPress::ShortPress => {
+            ButtonPress::Short => {
                 if self.showing_app_picker {
                     self.app_selected().await;
                 } else {
@@ -134,13 +143,19 @@ impl AppController {
                         Apps::Pomodoro => {
                             self.pomodoro_app.button_one_short_press(self.spawner).await
                         }
+                        Apps::Stopwatch => {
+                            self.stopwatch_app
+                                .button_one_short_press(self.spawner)
+                                .await
+                        }
                         Apps::Settings => {
                             self.settings_app.button_one_short_press(self.spawner).await
                         }
                     }
                 }
             }
-            ButtonPress::LongPress => self.show_app_picker().await,
+            ButtonPress::Long => self.show_app_picker().await,
+            ButtonPress::Double => {}
         };
     }
 
@@ -155,6 +170,11 @@ impl AppController {
             Apps::Clock => self.clock_app.button_two_press(press, self.spawner).await,
             Apps::Pomodoro => {
                 self.pomodoro_app
+                    .button_two_press(press, self.spawner)
+                    .await
+            }
+            Apps::Stopwatch => {
+                self.stopwatch_app
                     .button_two_press(press, self.spawner)
                     .await
             }
@@ -180,6 +200,11 @@ impl AppController {
                     .button_three_press(press, self.spawner)
                     .await
             }
+            Apps::Stopwatch => {
+                self.stopwatch_app
+                    .button_three_press(press, self.spawner)
+                    .await
+            }
             Apps::Settings => {
                 self.settings_app
                     .button_three_press(press, self.spawner)
@@ -195,6 +220,7 @@ impl AppController {
         match self.active_app {
             Apps::Clock => self.clock_app.stop().await,
             Apps::Pomodoro => self.pomodoro_app.stop().await,
+            Apps::Stopwatch => self.stopwatch_app.stop().await,
             Apps::Settings => self.settings_app.stop().await,
         }
 
@@ -210,21 +236,28 @@ impl AppController {
         match self.active_app {
             Apps::Clock => {
                 DISPLAY_MATRIX
-                    .queue_text(self.pomodoro_app.get_name(), 1000, true)
+                    .queue_text(self.pomodoro_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Pomodoro;
             }
             Apps::Pomodoro => {
                 DISPLAY_MATRIX
-                    .queue_text(self.settings_app.get_name(), 1000, true)
+                    .queue_text(self.stopwatch_app.get_name(), 1000, true, false)
+                    .await;
+
+                self.active_app = Apps::Stopwatch;
+            }
+            Apps::Stopwatch => {
+                DISPLAY_MATRIX
+                    .queue_text(self.settings_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Settings;
             }
             Apps::Settings => {
                 DISPLAY_MATRIX
-                    .queue_text(self.clock_app.get_name(), 1000, true)
+                    .queue_text(self.clock_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Clock;
@@ -237,24 +270,31 @@ impl AppController {
         match self.active_app {
             Apps::Clock => {
                 DISPLAY_MATRIX
-                    .queue_text(self.settings_app.get_name(), 1000, true)
+                    .queue_text(self.settings_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Settings;
             }
             Apps::Pomodoro => {
                 DISPLAY_MATRIX
-                    .queue_text(self.clock_app.get_name(), 1000, true)
+                    .queue_text(self.clock_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Clock;
             }
-            Apps::Settings => {
+            Apps::Stopwatch => {
                 DISPLAY_MATRIX
-                    .queue_text(self.pomodoro_app.get_name(), 1000, true)
+                    .queue_text(self.pomodoro_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Pomodoro;
+            }
+            Apps::Settings => {
+                DISPLAY_MATRIX
+                    .queue_text(self.stopwatch_app.get_name(), 1000, true, false)
+                    .await;
+
+                self.active_app = Apps::Stopwatch;
             }
         }
     }
@@ -266,6 +306,7 @@ impl AppController {
         match self.active_app {
             Apps::Clock => self.clock_app.start(self.spawner).await,
             Apps::Pomodoro => self.pomodoro_app.start(self.spawner).await,
+            Apps::Stopwatch => self.stopwatch_app.start(self.spawner).await,
             Apps::Settings => self.settings_app.start(self.spawner).await,
         }
     }

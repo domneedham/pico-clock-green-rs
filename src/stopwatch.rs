@@ -19,10 +19,10 @@ use crate::{
 static STOP_APP_CHANNEL: PubSubChannel<ThreadModeRawMutex, StopAppTasks, 1, 1, 1> =
     PubSubChannel::new();
 
-/// Depict the current running state of the pomodoro timer.
+/// Depict the current running state of the stopwatch timer.
 #[derive(Clone, Copy)]
 enum RunningState {
-    /// When the pomodoro app is first created or after reset. This should allow modification to the timer.
+    /// When the stopwatch app is first created or after reset. This should allow modification to the timer.
     NotStarted,
 
     /// When the countdown is running. This should *not* allow modification to the timer.
@@ -35,8 +35,8 @@ enum RunningState {
     Finished,
 }
 
-/// Manage active state of the pomodoro app.
-struct PomoState {
+/// Manage active state of the stopwatch app.
+struct StopwatchState {
     /// The current running state.
     running: RunningState,
 
@@ -47,42 +47,42 @@ struct PomoState {
     seconds: u32,
 }
 
-impl PomoState {
-    /// Create a new pomodoro state with the set defaults.
+impl StopwatchState {
+    /// Create a new stopwatch state with the set defaults.
     const fn new() -> Self {
         Self {
             running: RunningState::NotStarted,
-            minutes: 30,
+            minutes: 0,
             seconds: 0,
         }
     }
 
-    /// Reset the pomodoro state to the defaults it initialises with.
+    /// Reset the stopwatch state to the defaults it initialises with.
     pub fn reset(&mut self) {
-        self.minutes = 30;
+        self.minutes = 0;
         self.seconds = 0;
         self.running = RunningState::NotStarted;
     }
 }
 
 /// Static reference to the pomo state so it can be accessed by static tasks.
-static POMO_STATE: Mutex<ThreadModeRawMutex, RefCell<PomoState>> =
-    Mutex::new(RefCell::new(PomoState::new()));
+static STOPWATCH_STATE: Mutex<ThreadModeRawMutex, RefCell<StopwatchState>> =
+    Mutex::new(RefCell::new(StopwatchState::new()));
 
-/// Pomodoro app.
-/// Allows for setting a time up to 60 minutes and counting down to 0 seconds.
-pub struct PomodoroApp {}
+/// Stopwatch app.
+/// Allows for setting starting a stopwatch upto 60 minutes.
+pub struct StopwatchApp {}
 
-impl PomodoroApp {
-    /// Create a new pomodoro app.
+impl StopwatchApp {
+    /// Create a new stopwatch app.
     pub fn new() -> Self {
         Self {}
     }
 }
 
-impl App for PomodoroApp {
+impl App for StopwatchApp {
     fn get_name(&self) -> &str {
-        "Pomodoro"
+        "Stopwatch"
     }
 
     async fn start(&mut self, spawner: Spawner) {
@@ -93,8 +93,8 @@ impl App for PomodoroApp {
         match get_running_state().await {
             RunningState::NotStarted => {}
             RunningState::Running => {}
-            RunningState::Paused => spawner.spawn(countdown()).unwrap(),
-            RunningState::Finished => POMO_STATE.lock().await.borrow_mut().get_mut().reset(),
+            RunningState::Paused => spawner.spawn(stopwatch()).unwrap(),
+            RunningState::Finished => STOPWATCH_STATE.lock().await.borrow_mut().get_mut().reset(),
         }
 
         show_time().await;
@@ -114,17 +114,17 @@ impl App for PomodoroApp {
         match get_running_state().await {
             RunningState::NotStarted => {
                 set_running(RunningState::Running).await;
-                spawner.spawn(countdown()).unwrap()
+                spawner.spawn(stopwatch()).unwrap()
             }
             RunningState::Running => {
-                // due to running delay, 1s is lost on button press, so add them back
+                // due to running delay, 1s is lost on button press, so take them back away
                 let (mut minutes, mut seconds) = get_time().await;
 
                 if seconds == 59 {
-                    minutes += 1;
+                    minutes -= 1;
                     seconds = 0;
                 } else {
-                    seconds += 1;
+                    seconds -= 1;
                 }
                 set_time(minutes, seconds).await;
                 show_time().await;
@@ -132,7 +132,7 @@ impl App for PomodoroApp {
             }
             RunningState::Paused => set_running(RunningState::Running).await,
             RunningState::Finished => {
-                POMO_STATE.lock().await.borrow_mut().get_mut().reset();
+                STOPWATCH_STATE.lock().await.borrow_mut().get_mut().reset();
                 show_time().await;
             }
         }
@@ -147,23 +147,11 @@ impl App for PomodoroApp {
 
         match press {
             ButtonPress::Long => {
-                minutes = 30;
+                minutes = 0;
                 seconds = 0;
             }
-            ButtonPress::Short => {
-                if minutes == 60 {
-                    minutes = 1;
-                } else {
-                    minutes += 1;
-                }
-            }
-            ButtonPress::Double => {
-                if minutes > 55 {
-                    minutes = 1;
-                } else {
-                    minutes += 5;
-                }
-            }
+            ButtonPress::Short => {}
+            ButtonPress::Double => {}
         }
 
         set_time(minutes, seconds).await;
@@ -179,23 +167,11 @@ impl App for PomodoroApp {
 
         match press {
             ButtonPress::Long => {
-                minutes = 30;
+                minutes = 0;
                 seconds = 0;
             }
-            ButtonPress::Short => {
-                if minutes == 1 {
-                    minutes = 60;
-                } else {
-                    minutes -= 1;
-                }
-            }
-            ButtonPress::Double => {
-                if minutes < 5 {
-                    minutes = 60;
-                } else {
-                    minutes -= 5;
-                }
-            }
+            ButtonPress::Short => {}
+            ButtonPress::Double => {}
         }
 
         set_time(minutes, seconds).await;
@@ -203,39 +179,39 @@ impl App for PomodoroApp {
     }
 }
 
-/// Get the running state value from the static pomodoro state.
+/// Get the running state value from the static stopwatch state.
 async fn get_running_state() -> RunningState {
-    POMO_STATE.lock().await.borrow().running
+    STOPWATCH_STATE.lock().await.borrow().running
 }
 
-/// Get the (minutes, seconds) state value from the static pomodoro state.
+/// Get the (minutes, seconds) state value from the static stopwatch state.
 async fn get_time() -> (u32, u32) {
-    let minutes = POMO_STATE.lock().await.borrow().minutes;
-    let seconds = POMO_STATE.lock().await.borrow().seconds;
+    let minutes = STOPWATCH_STATE.lock().await.borrow().minutes;
+    let seconds = STOPWATCH_STATE.lock().await.borrow().seconds;
     (minutes, seconds)
 }
 
-/// Set the new time to display and count down from on the static pomodoro state.
+/// Set the new time to display and count down from on the static stopwatch state.
 async fn set_time(minutes: u32, seconds: u32) {
-    let mut guard = POMO_STATE.lock().await;
+    let mut guard = STOPWATCH_STATE.lock().await;
     let state = guard.borrow_mut().get_mut();
 
     state.minutes = minutes;
     state.seconds = seconds;
 }
 
-/// Set the running state on the static pomodoro state.
+/// Set the running state on the static stopwatch state.
 /// Will show/hide the CountDown icon on the display depending on the state passed.
 async fn set_running(running: RunningState) {
-    let mut guard = POMO_STATE.lock().await;
+    let mut guard = STOPWATCH_STATE.lock().await;
     let state = guard.borrow_mut().get_mut();
 
     state.running = running;
 
     if let RunningState::Running = running {
-        DISPLAY_MATRIX.show_icon("CountDown");
+        DISPLAY_MATRIX.show_icon("CountUp");
     } else {
-        DISPLAY_MATRIX.hide_icon("CountDown");
+        DISPLAY_MATRIX.hide_icon("CountUp");
     }
 
     if let RunningState::Finished = running {
@@ -243,7 +219,7 @@ async fn set_running(running: RunningState) {
     }
 }
 
-/// Will show the time grabbed from the static pomodoro state.
+/// Will show the time grabbed from the static stopwatch state.
 async fn show_time() {
     let (minutes, seconds) = get_time().await;
     DISPLAY_MATRIX
@@ -251,11 +227,11 @@ async fn show_time() {
         .await;
 }
 
-/// The pomodoro countdown loop.
+/// The stopwatch countdown loop.
 ///
 /// Will continue to run as long as the running state is running or paused.
 #[embassy_executor::task]
-async fn countdown() {
+async fn stopwatch() {
     let mut stop_task_sub = STOP_APP_CHANNEL.subscriber().unwrap();
 
     show_time().await;
@@ -268,17 +244,17 @@ async fn countdown() {
                 let (mut minutes, mut seconds) = get_time().await;
                 show_time().await;
 
-                if seconds == 0 {
-                    if minutes == 0 {
+                if seconds == 59 {
+                    if minutes == 59 {
                         set_running(RunningState::Finished).await;
                         break;
                     }
 
-                    minutes -= 1;
+                    minutes += 1;
 
-                    seconds = 59;
+                    seconds = 0;
                 } else {
-                    seconds -= 1;
+                    seconds += 1
                 }
 
                 set_time(minutes, seconds).await;
