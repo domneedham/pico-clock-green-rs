@@ -5,6 +5,7 @@ use embassy_futures::select::{
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, signal::Signal};
 
 use crate::{
+    alarm::AlarmApp,
     buttons::{ButtonPress, BUTTON_ONE_PRESS, BUTTON_THREE_PRESS, BUTTON_TWO_PRESS},
     clock::ClockApp,
     display::display_matrix::DISPLAY_MATRIX,
@@ -56,6 +57,9 @@ enum Apps {
     /// The stopwatch app.
     Stopwatch,
 
+    /// The alarm app.
+    Alarm,
+
     /// The settings app.
     Settings,
 }
@@ -82,6 +86,9 @@ pub struct AppController {
     /// Stopwatch app.
     stopwatch_app: StopwatchApp,
 
+    /// Alarm app.
+    alarm_app: AlarmApp,
+
     /// Settings app.
     settings_app: SettingsApp,
 
@@ -96,6 +103,7 @@ impl AppController {
         clock_app: ClockApp,
         pomodoro_app: PomodoroApp,
         stopwatch_app: StopwatchApp,
+        alarm_app: AlarmApp,
         settings_app: SettingsApp,
     ) -> Self {
         Self {
@@ -104,6 +112,7 @@ impl AppController {
             clock_app,
             pomodoro_app,
             stopwatch_app,
+            alarm_app,
             settings_app,
             spawner,
         }
@@ -148,6 +157,7 @@ impl AppController {
                                 .button_one_short_press(self.spawner)
                                 .await
                         }
+                        Apps::Alarm => self.alarm_app.button_one_short_press(self.spawner).await,
                         Apps::Settings => {
                             self.settings_app.button_one_short_press(self.spawner).await
                         }
@@ -178,6 +188,7 @@ impl AppController {
                     .button_two_press(press, self.spawner)
                     .await
             }
+            Apps::Alarm => self.alarm_app.button_two_press(press, self.spawner).await,
             Apps::Settings => {
                 self.settings_app
                     .button_two_press(press, self.spawner)
@@ -205,6 +216,7 @@ impl AppController {
                     .button_three_press(press, self.spawner)
                     .await
             }
+            Apps::Alarm => self.alarm_app.button_three_press(press, self.spawner).await,
             Apps::Settings => {
                 self.settings_app
                     .button_three_press(press, self.spawner)
@@ -221,6 +233,7 @@ impl AppController {
             Apps::Clock => self.clock_app.stop().await,
             Apps::Pomodoro => self.pomodoro_app.stop().await,
             Apps::Stopwatch => self.stopwatch_app.stop().await,
+            Apps::Alarm => self.alarm_app.stop().await,
             Apps::Settings => self.settings_app.stop().await,
         }
 
@@ -249,6 +262,13 @@ impl AppController {
                 self.active_app = Apps::Stopwatch;
             }
             Apps::Stopwatch => {
+                DISPLAY_MATRIX
+                    .queue_text(self.alarm_app.get_name(), 1000, true, false)
+                    .await;
+
+                self.active_app = Apps::Alarm;
+            }
+            Apps::Alarm => {
                 DISPLAY_MATRIX
                     .queue_text(self.settings_app.get_name(), 1000, true, false)
                     .await;
@@ -289,12 +309,19 @@ impl AppController {
 
                 self.active_app = Apps::Pomodoro;
             }
-            Apps::Settings => {
+            Apps::Alarm => {
                 DISPLAY_MATRIX
                     .queue_text(self.stopwatch_app.get_name(), 1000, true, false)
                     .await;
 
                 self.active_app = Apps::Stopwatch;
+            }
+            Apps::Settings => {
+                DISPLAY_MATRIX
+                    .queue_text(self.alarm_app.get_name(), 1000, true, false)
+                    .await;
+
+                self.active_app = Apps::Alarm;
             }
         }
     }
@@ -307,6 +334,7 @@ impl AppController {
             Apps::Clock => self.clock_app.start(self.spawner).await,
             Apps::Pomodoro => self.pomodoro_app.start(self.spawner).await,
             Apps::Stopwatch => self.stopwatch_app.start(self.spawner).await,
+            Apps::Alarm => self.alarm_app.start(self.spawner).await,
             Apps::Settings => self.settings_app.start(self.spawner).await,
         }
     }

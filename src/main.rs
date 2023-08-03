@@ -8,6 +8,9 @@
 //! Implementation of the Waveshare Pico Clock Green written in Rust.
 //! This is evolving and not feature complete.
 
+/// Use alarm module.
+mod alarm;
+
 /// Use app module.
 mod app;
 
@@ -43,6 +46,7 @@ mod stopwatch;
 
 use crate::display::{Display, DisplayPins};
 
+use alarm::AlarmApp;
 use app::AppController;
 use clock::ClockApp;
 use ds323x::Ds323x;
@@ -147,6 +151,7 @@ async fn main_core(
     let clock_app = ClockApp::new();
     let pomodoro_app = PomodoroApp::new();
     let stopwatch_app = StopwatchApp::new();
+    let alarm_app = AlarmApp::new();
     let settings_app = SettingsApp::new();
 
     let mut app_controller = AppController::new(
@@ -154,6 +159,7 @@ async fn main_core(
         clock_app,
         pomodoro_app,
         stopwatch_app,
+        alarm_app,
         settings_app,
     );
     app_controller.run_forever().await;
