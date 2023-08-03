@@ -42,7 +42,7 @@ Switch the temperature unit.
 
 #### Double Press
 
-This will do nothing.
+This will toggle between 12hr and 24hr format.
 
 ### Bottom Button
 
