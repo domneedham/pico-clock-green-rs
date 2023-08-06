@@ -108,6 +108,8 @@ pub mod backlight {
     };
     use embassy_time::{Duration, Instant, Timer};
 
+    use crate::config;
+
     /// List of sleep durations, where higher numbers are brighter outputs.
     const LIGHT_LEVELS: [u64; 5] = [10, 100, 300, 700, 1000];
 
@@ -138,11 +140,13 @@ pub mod backlight {
     #[embassy_executor::task]
     pub async fn update_backlight(mut pins: BacklightPins<'static>) {
         let mut last_backlight_read = Instant::now();
-        let mut sleep_duration = 400;
+        let mut sleep_duration = LIGHT_LEVELS[3];
 
         loop {
             let now_time = Instant::now();
-            if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1) {
+            if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1)
+                && config::CONFIG.lock().await.borrow().get_autolight()
+            {
                 last_backlight_read = now_time;
                 let level_read = pins.adc.read(&mut pins.ain).await.unwrap();
                 sleep_duration = match level_read {
@@ -958,17 +962,26 @@ pub mod display_matrix {
             match pref {
                 TimePreference::Twelve => {
                     if hour >= 12 {
-                        DISPLAY_MATRIX.hide_icon("AM");
-                        DISPLAY_MATRIX.show_icon("PM");
+                        self.hide_icon("AM");
+                        self.show_icon("PM");
                     } else {
-                        DISPLAY_MATRIX.hide_icon("PM");
-                        DISPLAY_MATRIX.show_icon("AM");
+                        self.hide_icon("PM");
+                        self.show_icon("AM");
                     }
                 }
                 TimePreference::TwentyFour => {
-                    DISPLAY_MATRIX.hide_icon("AM");
-                    DISPLAY_MATRIX.hide_icon("PM");
+                    self.hide_icon("AM");
+                    self.hide_icon("PM");
                 }
+            }
+        }
+
+        /// Show or hide the autolight icon.
+        pub fn show_autolight_icon(&self, state: bool) {
+            if state {
+                self.show_icon("AutoLight");
+            } else {
+                self.hide_icon("AutoLight");
             }
         }
 

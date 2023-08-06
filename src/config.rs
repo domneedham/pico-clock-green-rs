@@ -35,6 +35,9 @@ pub struct Config {
 
     /// The users time representation preference.
     time_pref: TimePreference,
+
+    /// Whether the display should use auto brightness or not.
+    autolight: bool,
 }
 
 impl Config {
@@ -45,6 +48,7 @@ impl Config {
             temp_pref: TemperaturePreference::Celcius,
             auto_scroll_temp: true,
             time_pref: TimePreference::TwentyFour,
+            autolight: true,
         }
     }
 
@@ -106,6 +110,23 @@ impl Config {
             TimePreference::Twelve => self.set_time_preference(TimePreference::TwentyFour),
             TimePreference::TwentyFour => self.set_time_preference(TimePreference::Twelve),
         }
+    }
+
+    /// Get the autolight state.
+    pub fn get_autolight(&self) -> bool {
+        self.autolight
+    }
+
+    /// Set the autolight state.
+    pub fn set_autolight(&mut self, new_state: bool) {
+        self.autolight = new_state;
+    }
+
+    /// Toggle the autolight value. Return the new value.
+    pub fn toggle_autolight(&mut self) -> bool {
+        let state = !self.autolight;
+        self.set_autolight(state);
+        state
     }
 }
 

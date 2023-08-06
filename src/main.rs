@@ -43,7 +43,7 @@ mod stopwatch;
 
 use app::AppController;
 use clock::ClockApp;
-use display::{backlight::BacklightPins, DisplayPins};
+use display::{backlight::BacklightPins, display_matrix::DISPLAY_MATRIX, DisplayPins};
 use ds323x::Ds323x;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
@@ -178,9 +178,11 @@ async fn display_core(
     display_pins: DisplayPins<'static>,
     backlight_pins: BacklightPins<'static>,
 ) {
-    // display.run_forever().await;
     spawner.spawn(display::update_matrix(display_pins)).unwrap();
     spawner
         .spawn(display::backlight::update_backlight(backlight_pins))
         .unwrap();
+
+    let autolight_enabled = config::CONFIG.lock().await.borrow().get_autolight();
+    DISPLAY_MATRIX.show_autolight_icon(autolight_enabled);
 }
