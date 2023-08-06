@@ -141,11 +141,6 @@ pub mod backlight {
         let mut sleep_duration = 400;
 
         loop {
-            pins.oe.set_low();
-            Timer::after(Duration::from_micros(sleep_duration)).await;
-            pins.oe.set_high();
-            Timer::after(Duration::from_micros(25)).await;
-
             let now_time = Instant::now();
             if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1) {
                 last_backlight_read = now_time;
@@ -158,6 +153,11 @@ pub mod backlight {
                     _ => LIGHT_LEVELS[0],
                 };
             }
+
+            pins.oe.set_low();
+            Timer::after(Duration::from_micros(sleep_duration)).await;
+            pins.oe.set_high();
+            Timer::after(Duration::from_micros(25)).await;
         }
     }
 }
