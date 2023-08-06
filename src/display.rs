@@ -54,8 +54,9 @@ impl<'a> DisplayPins<'a> {
     }
 }
 
+/// Update the display with accordance to the last known state of the matrix.
 #[embassy_executor::task]
-pub async fn update_matrix(mut pins: DisplayPins<'static>) -> () {
+pub async fn update_matrix(mut pins: DisplayPins<'static>) {
     let mut row: usize = 0;
 
     loop {
@@ -99,66 +100,64 @@ pub async fn update_matrix(mut pins: DisplayPins<'static>) -> () {
     }
 }
 
+/// Backlight module. Will adjust backlight automatically.
 pub mod backlight {
-
-    use core::cell::RefCell;
-
-    use defmt::info;
     use embassy_rp::{
         adc::{Adc, Async, Pin},
         gpio::Output,
     };
-    use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
-    use embassy_time::{Duration, Timer};
+    use embassy_time::{Duration, Instant, Timer};
 
-    static BACKLIGHT_SLEEP: Mutex<ThreadModeRawMutex, RefCell<u64>> = Mutex::new(RefCell::new(400));
-
+    /// List of sleep durations, where higher numbers are brighter outputs.
     const LIGHT_LEVELS: [u64; 5] = [10, 100, 300, 700, 1000];
 
-    pub struct BacklightReadPins<'a> {
-        /// ADC.
-        adc: Adc<'a, Async>,
+    /// All the pins required for backlight implementation.
+    pub struct BacklightPins<'a> {
+        /// OE pin.
+        pub oe: Output<'static, embassy_rp::peripherals::PIN_13>,
 
-        /// AIN.
-        ain: Pin<'a>,
+        /// ADC controller.
+        pub adc: Adc<'a, Async>,
+
+        /// AIN pin.
+        pub ain: Pin<'a>,
     }
 
-    impl<'a> BacklightReadPins<'a> {
-        pub fn new(adc: Adc<'a, Async>, ain: Pin<'a>) -> Self {
-            Self { adc, ain }
+    impl<'a> BacklightPins<'a> {
+        /// Create a new backlight pins struct.
+        pub fn new(
+            oe: Output<'static, embassy_rp::peripherals::PIN_13>,
+            adc: Adc<'a, Async>,
+            ain: Pin<'a>,
+        ) -> Self {
+            Self { oe, adc, ain }
         }
     }
 
+    /// Set brightness level every X seconds.
     #[embassy_executor::task]
-    pub async fn backlight(mut oe: Output<'static, embassy_rp::peripherals::PIN_13>) -> () {
+    pub async fn update_backlight(mut pins: BacklightPins<'static>) {
+        let mut last_backlight_read = Instant::now();
+        let mut sleep_duration = 400;
+
         loop {
-            oe.set_low();
-            Timer::after(Duration::from_micros(
-                *BACKLIGHT_SLEEP.lock().await.borrow(),
-            ))
-            .await;
-            oe.set_high();
+            pins.oe.set_low();
+            Timer::after(Duration::from_micros(sleep_duration)).await;
+            pins.oe.set_high();
             Timer::after(Duration::from_micros(25)).await;
-        }
-    }
 
-    #[embassy_executor::task]
-    pub async fn update_backlight_sleep(mut pins: BacklightReadPins<'static>) {
-        let mut level = 0;
-
-        loop {
-            let level_read = pins.adc.read(&mut pins.ain).await.unwrap();
-            info!("Light level {}", level);
-            level = match level_read {
-                0..=3749 => LIGHT_LEVELS[4],
-                3750..=3799 => LIGHT_LEVELS[3],
-                3800..=3849 => LIGHT_LEVELS[2],
-                3850..=3899 => LIGHT_LEVELS[1],
-                _ => LIGHT_LEVELS[0],
-            };
-            BACKLIGHT_SLEEP.lock().await.replace(level);
-
-            Timer::after(Duration::from_secs(1)).await;
+            let now_time = Instant::now();
+            if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1) {
+                last_backlight_read = now_time;
+                let level_read = pins.adc.read(&mut pins.ain).await.unwrap();
+                sleep_duration = match level_read {
+                    0..=3749 => LIGHT_LEVELS[4],
+                    3750..=3799 => LIGHT_LEVELS[3],
+                    3800..=3849 => LIGHT_LEVELS[2],
+                    3850..=3899 => LIGHT_LEVELS[1],
+                    _ => LIGHT_LEVELS[0],
+                };
+            }
         }
     }
 }
