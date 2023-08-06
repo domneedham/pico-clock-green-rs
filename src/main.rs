@@ -41,10 +41,12 @@ mod speaker;
 /// Use stopwatch module.
 mod stopwatch;
 
-use crate::display::{Display, DisplayPins};
-
 use app::AppController;
 use clock::ClockApp;
+use display::{
+    backlight::{backlight, update_backlight_sleep, BacklightReadPins},
+    DisplayPins,
+};
 use ds323x::Ds323x;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
@@ -105,12 +107,17 @@ fn main() -> ! {
     let le: Output<'_, PIN_12> = Output::new(p.PIN_12, Level::Low);
     let adc = Adc::new(p.ADC, Irqs, ADCConfig::default());
     let ain = Pin::new(p.PIN_26, Pull::None);
-    let display_pins: DisplayPins<'_> = DisplayPins::new(a0, a1, a2, oe, sdi, clk, le, adc, ain);
-    let display: Display<'_> = Display::new(display_pins);
+    let display_pins: DisplayPins<'_> = DisplayPins::new(a0, a1, a2, sdi, clk, le);
+    let backlight_pins: BacklightReadPins<'_> = BacklightReadPins::new(adc, ain);
+    // let display: Display<'_> = Display::new(display_pins);
 
     embassy_rp::multicore::spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
         let executor1 = EXECUTOR1.init(Executor::new());
-        executor1.run(|spawner| spawner.spawn(display_core(display)).unwrap());
+        executor1.run(|spawner| {
+            spawner
+                .spawn(display_core(spawner, display_pins, oe, backlight_pins))
+                .unwrap()
+        });
     });
 
     let executor0 = EXECUTOR0.init(Executor::new());
@@ -169,6 +176,16 @@ async fn main_core(
 
 /// Task to run on the second core.
 #[embassy_executor::task]
-async fn display_core(mut display: Display<'static>) {
-    display.run_forever().await;
+async fn display_core(
+    spawner: Spawner,
+    display_pins: DisplayPins<'static>,
+    oe: Output<'static, embassy_rp::peripherals::PIN_13>,
+    backlight_read_pins: BacklightReadPins<'static>,
+) {
+    // display.run_forever().await;
+    spawner.spawn(display::update_matrix(display_pins)).unwrap();
+    spawner.spawn(backlight(oe)).unwrap();
+    spawner
+        .spawn(update_backlight_sleep(backlight_read_pins))
+        .unwrap();
 }

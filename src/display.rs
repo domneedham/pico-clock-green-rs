@@ -2,10 +2,7 @@ use core::cell::RefCell;
 use core::fmt::Write;
 use critical_section::{CriticalSection, Mutex};
 use defmt::info;
-use embassy_rp::{
-    adc::{Adc, Async, Pin},
-    gpio::Output,
-};
+use embassy_rp::gpio::Output;
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use embassy_time::{Duration, Timer};
 use heapless::Vec;
@@ -26,9 +23,6 @@ pub struct DisplayPins<'a> {
     /// A2 pin.
     a2: Output<'a, embassy_rp::peripherals::PIN_22>,
 
-    /// OE pin.
-    oe: Output<'a, embassy_rp::peripherals::PIN_13>,
-
     /// SDI pin.
     sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
 
@@ -37,11 +31,6 @@ pub struct DisplayPins<'a> {
 
     /// LE pin.
     le: Output<'a, embassy_rp::peripherals::PIN_12>,
-
-    /// ADC
-    adc: Adc<'a, Async>,
-
-    ain: Pin<'a>,
 }
 
 impl<'a> DisplayPins<'a> {
@@ -50,85 +39,126 @@ impl<'a> DisplayPins<'a> {
         a0: Output<'a, embassy_rp::peripherals::PIN_16>,
         a1: Output<'a, embassy_rp::peripherals::PIN_18>,
         a2: Output<'a, embassy_rp::peripherals::PIN_22>,
-        oe: Output<'a, embassy_rp::peripherals::PIN_13>,
         sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
         clk: Output<'a, embassy_rp::peripherals::PIN_10>,
         le: Output<'a, embassy_rp::peripherals::PIN_12>,
-        adc: Adc<'a, Async>,
-        ain: Pin<'a>,
     ) -> Self {
         Self {
             a0,
             a1,
             a2,
-            oe,
             sdi,
             clk,
             le,
-            adc,
-            ain,
         }
     }
 }
 
-/// Display. Sole purpose is turn on/off leds as required for showing all things in the display.
-pub struct Display<'a> {
-    /// All the pins required for the display.
-    pins: DisplayPins<'a>,
+#[embassy_executor::task]
+pub async fn update_matrix(mut pins: DisplayPins<'static>) -> () {
+    let mut row: usize = 0;
 
-    /// The current row being looped through.
-    row: usize,
+    loop {
+        row = (row + 1) % 8;
+
+        critical_section::with(|cs| {
+            for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[row] {
+                pins.clk.set_low();
+                pins.sdi.set_low();
+
+                if col == 1 {
+                    pins.sdi.set_high();
+                }
+
+                pins.clk.set_high();
+            }
+        });
+
+        pins.le.set_high();
+        pins.le.set_low();
+
+        if row & 0x01 != 0 {
+            pins.a0.set_high();
+        } else {
+            pins.a0.set_low();
+        }
+
+        if row & 0x02 != 0 {
+            pins.a1.set_high();
+        } else {
+            pins.a1.set_low();
+        }
+
+        if row & 0x04 != 0 {
+            pins.a2.set_high();
+        } else {
+            pins.a2.set_low();
+        }
+
+        Timer::after(Duration::from_millis(1)).await;
+    }
 }
 
-impl<'a> Display<'a> {
-    /// Create a new display struct.
-    pub fn new(pins: DisplayPins<'a>) -> Display {
-        Self { pins, row: 0 }
+pub mod backlight {
+
+    use core::cell::RefCell;
+
+    use defmt::info;
+    use embassy_rp::{
+        adc::{Adc, Async, Pin},
+        gpio::Output,
+    };
+    use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
+    use embassy_time::{Duration, Timer};
+
+    static BACKLIGHT_SLEEP: Mutex<ThreadModeRawMutex, RefCell<u64>> = Mutex::new(RefCell::new(400));
+
+    const LIGHT_LEVELS: [u64; 5] = [10, 100, 300, 700, 1000];
+
+    pub struct BacklightReadPins<'a> {
+        /// ADC.
+        adc: Adc<'a, Async>,
+
+        /// AIN.
+        ain: Pin<'a>,
     }
 
-    /// The main display loop. Will not terminate.
-    pub async fn run_forever(&mut self) -> ! {
-        let level = self.pins.adc.read(&mut self.pins.ain).await.unwrap();
-        info!("Light level {}", level);
+    impl<'a> BacklightReadPins<'a> {
+        pub fn new(adc: Adc<'a, Async>, ain: Pin<'a>) -> Self {
+            Self { adc, ain }
+        }
+    }
+
+    #[embassy_executor::task]
+    pub async fn backlight(mut oe: Output<'static, embassy_rp::peripherals::PIN_13>) -> () {
         loop {
-            self.row = (self.row + 1) % 8;
+            oe.set_low();
+            Timer::after(Duration::from_micros(
+                *BACKLIGHT_SLEEP.lock().await.borrow(),
+            ))
+            .await;
+            oe.set_high();
+            Timer::after(Duration::from_micros(25)).await;
+        }
+    }
 
-            critical_section::with(|cs| {
-                for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
-                    self.pins.clk.set_low();
-                    if col == 1 {
-                        self.pins.sdi.set_high();
-                    } else {
-                        self.pins.sdi.set_low();
-                    }
-                    self.pins.clk.set_high();
-                }
-            });
+    #[embassy_executor::task]
+    pub async fn update_backlight_sleep(mut pins: BacklightReadPins<'static>) {
+        let mut level = 0;
 
-            self.pins.le.set_high();
-            self.pins.le.set_low();
+        loop {
+            let level_read = pins.adc.read(&mut pins.ain).await.unwrap();
+            info!("Light level {}", level);
+            level = match level_read {
+                0..=3749 => LIGHT_LEVELS[4],
+                3750..=3799 => LIGHT_LEVELS[3],
+                3800..=3849 => LIGHT_LEVELS[2],
+                3850..=3899 => LIGHT_LEVELS[1],
+                _ => LIGHT_LEVELS[0],
+            };
+            BACKLIGHT_SLEEP.lock().await.replace(level);
 
-            if self.row & 0x01 != 0 {
-                self.pins.a0.set_high();
-            } else {
-                self.pins.a0.set_low();
-            }
-
-            if self.row & 0x02 != 0 {
-                self.pins.a1.set_high();
-            } else {
-                self.pins.a1.set_low();
-            }
-
-            if self.row & 0x04 != 0 {
-                self.pins.a2.set_high();
-            } else {
-                self.pins.a2.set_low();
-            }
-
-            self.pins.oe.set_low();
-            Timer::after(Duration::from_micros(100)).await;
-            self.pins.oe.set_high();
+            Timer::after(Duration::from_secs(1)).await;
         }
     }
 }
