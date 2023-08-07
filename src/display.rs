@@ -96,7 +96,7 @@ pub async fn update_matrix(mut pins: DisplayPins<'static>) {
             pins.a2.set_low();
         }
 
-        Timer::after(Duration::from_millis(1)).await;
+        Timer::after(Duration::from_micros(900)).await;
     }
 }
 
@@ -477,6 +477,34 @@ pub mod display_matrix {
                 .await;
         }
 
+        pub async fn queue_time_blink_colon(
+            &self,
+            left: u32,
+            right: u32,
+            hold_end_ms: u64,
+            show_now: bool,
+            scroll_off_display: bool,
+        ) {
+            let mut time = String::<8>::new();
+
+            if left < 10 {
+                _ = write!(time, "0{left}");
+            } else {
+                _ = write!(time, "{left}");
+            }
+
+            _ = write!(time, " ");
+
+            if right < 10 {
+                _ = write!(time, "0{right}");
+            } else {
+                _ = write!(time, "{right}");
+            }
+
+            self.queue_text(time.as_str(), hold_end_ms, show_now, scroll_off_display)
+                .await;
+        }
+
         /// Queue the time into the text buffer. Will append to the queue.
         ///
         /// Will automatically prepend a 0 if any number is below 10.
@@ -782,14 +810,17 @@ pub mod display_matrix {
         ///
         /// Responsible for moving items on the display left (animation) if the position of the last item is at the end of the display.
         async fn show_text(&self, item: TextBufferItem<'_>) {
-            critical_section::with(|cs| {
-                self.clear(cs, false);
-            });
-
             let mut total_width = 0;
 
             for c in &item.text {
                 total_width += c.width;
+            }
+
+            // if width is greater than matrix size with whitespace accounted for
+            if total_width < Self::LAST_INDEX - (item.text.len() * 2) {
+                critical_section::with(|cs| {
+                    self.clear(cs, false);
+                });
             }
 
             let mut pos = item.start_position;
