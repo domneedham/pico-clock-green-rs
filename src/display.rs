@@ -103,7 +103,7 @@ pub async fn update_matrix(mut pins: DisplayPins<'static>) {
 /// Backlight module. Will adjust backlight automatically.
 pub mod backlight {
     use embassy_rp::{
-        adc::{Adc, Async, Pin},
+        adc::{Adc, Async, Channel},
         gpio::Output,
     };
     use embassy_time::{Duration, Instant, Timer};
@@ -122,7 +122,7 @@ pub mod backlight {
         pub adc: Adc<'a, Async>,
 
         /// AIN pin.
-        pub ain: Pin<'a>,
+        pub ain: Channel<'a>,
     }
 
     impl<'a> BacklightPins<'a> {
@@ -130,7 +130,7 @@ pub mod backlight {
         pub fn new(
             oe: Output<'static, embassy_rp::peripherals::PIN_13>,
             adc: Adc<'a, Async>,
-            ain: Pin<'a>,
+            ain: Channel<'a>,
         ) -> Self {
             Self { oe, adc, ain }
         }

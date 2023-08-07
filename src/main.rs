@@ -47,7 +47,7 @@ use display::{backlight::BacklightPins, display_matrix::DISPLAY_MATRIX, DisplayP
 use ds323x::Ds323x;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
-    adc::{Adc, Config as ADCConfig, InterruptHandler, Pin},
+    adc::{Adc, Channel, Config as ADCConfig, InterruptHandler},
     bind_interrupts,
     gpio::{Input, Level, Output, Pull},
     i2c::{self, Config as I2CConfig},
@@ -103,7 +103,7 @@ fn main() -> ! {
     let clk: Output<'_, PIN_10> = Output::new(p.PIN_10, Level::Low);
     let le: Output<'_, PIN_12> = Output::new(p.PIN_12, Level::Low);
     let adc = Adc::new(p.ADC, Irqs, ADCConfig::default());
-    let ain = Pin::new(p.PIN_26, Pull::None);
+    let ain = Channel::new_pin(p.PIN_26, Pull::None);
     let display_pins: DisplayPins<'_> = DisplayPins::new(a0, a1, a2, sdi, clk, le);
     let backlight_pins: BacklightPins<'_> = BacklightPins::new(oe, adc, ain);
     // let display: Display<'_> = Display::new(display_pins);
