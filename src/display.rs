@@ -23,9 +23,6 @@ pub struct DisplayPins<'a> {
     /// A2 pin.
     a2: Output<'a, embassy_rp::peripherals::PIN_22>,
 
-    /// OE pin.
-    oe: Output<'a, embassy_rp::peripherals::PIN_13>,
-
     /// SDI pin.
     sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
 
@@ -42,7 +39,6 @@ impl<'a> DisplayPins<'a> {
         a0: Output<'a, embassy_rp::peripherals::PIN_16>,
         a1: Output<'a, embassy_rp::peripherals::PIN_18>,
         a2: Output<'a, embassy_rp::peripherals::PIN_22>,
-        oe: Output<'a, embassy_rp::peripherals::PIN_13>,
         sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
         clk: Output<'a, embassy_rp::peripherals::PIN_10>,
         le: Output<'a, embassy_rp::peripherals::PIN_12>,
@@ -51,7 +47,6 @@ impl<'a> DisplayPins<'a> {
             a0,
             a1,
             a2,
-            oe,
             sdi,
             clk,
             le,
@@ -59,62 +54,114 @@ impl<'a> DisplayPins<'a> {
     }
 }
 
-/// Display. Sole purpose is turn on/off leds as required for showing all things in the display.
-pub struct Display<'a> {
-    /// All the pins required for the display.
-    pins: DisplayPins<'a>,
+/// Update the display with accordance to the last known state of the matrix.
+#[embassy_executor::task]
+pub async fn update_matrix(mut pins: DisplayPins<'static>) {
+    let mut row: usize = 0;
 
-    /// The current row being looped through.
-    row: usize,
+    loop {
+        row = (row + 1) % 8;
+
+        critical_section::with(|cs| {
+            for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[row] {
+                pins.clk.set_low();
+                pins.sdi.set_low();
+
+                if col == 1 {
+                    pins.sdi.set_high();
+                }
+
+                pins.clk.set_high();
+            }
+        });
+
+        pins.le.set_high();
+        pins.le.set_low();
+
+        if row & 0x01 != 0 {
+            pins.a0.set_high();
+        } else {
+            pins.a0.set_low();
+        }
+
+        if row & 0x02 != 0 {
+            pins.a1.set_high();
+        } else {
+            pins.a1.set_low();
+        }
+
+        if row & 0x04 != 0 {
+            pins.a2.set_high();
+        } else {
+            pins.a2.set_low();
+        }
+
+        Timer::after(Duration::from_millis(1)).await;
+    }
 }
 
-impl<'a> Display<'a> {
-    /// Create a new display struct.
-    pub fn new(pins: DisplayPins<'a>) -> Display {
-        Self { pins, row: 0 }
+/// Backlight module. Will adjust backlight automatically.
+pub mod backlight {
+    use embassy_rp::{
+        adc::{Adc, Async, Channel},
+        gpio::Output,
+    };
+    use embassy_time::{Duration, Instant, Timer};
+
+    use crate::config;
+
+    /// List of sleep durations, where higher numbers are brighter outputs.
+    const LIGHT_LEVELS: [u64; 5] = [10, 100, 300, 700, 1000];
+
+    /// All the pins required for backlight implementation.
+    pub struct BacklightPins<'a> {
+        /// OE pin.
+        pub oe: Output<'static, embassy_rp::peripherals::PIN_13>,
+
+        /// ADC controller.
+        pub adc: Adc<'a, Async>,
+
+        /// AIN pin.
+        pub ain: Channel<'a>,
     }
 
-    /// The main display loop. Will not terminate.
-    pub async fn run_forever(&mut self) -> ! {
+    impl<'a> BacklightPins<'a> {
+        /// Create a new backlight pins struct.
+        pub fn new(
+            oe: Output<'static, embassy_rp::peripherals::PIN_13>,
+            adc: Adc<'a, Async>,
+            ain: Channel<'a>,
+        ) -> Self {
+            Self { oe, adc, ain }
+        }
+    }
+
+    /// Set brightness level every X seconds.
+    #[embassy_executor::task]
+    pub async fn update_backlight(mut pins: BacklightPins<'static>) {
+        let mut last_backlight_read = Instant::now();
+        let mut sleep_duration = LIGHT_LEVELS[3];
+
         loop {
-            self.row = (self.row + 1) % 8;
-
-            critical_section::with(|cs| {
-                for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
-                    self.pins.clk.set_low();
-                    if col == 1 {
-                        self.pins.sdi.set_high();
-                    } else {
-                        self.pins.sdi.set_low();
-                    }
-                    self.pins.clk.set_high();
-                }
-            });
-
-            self.pins.le.set_high();
-            self.pins.le.set_low();
-
-            if self.row & 0x01 != 0 {
-                self.pins.a0.set_high();
-            } else {
-                self.pins.a0.set_low();
+            let now_time = Instant::now();
+            if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1)
+                && config::CONFIG.lock().await.borrow().get_autolight()
+            {
+                last_backlight_read = now_time;
+                let level_read = pins.adc.read(&mut pins.ain).await.unwrap();
+                sleep_duration = match level_read {
+                    0..=3749 => LIGHT_LEVELS[4],
+                    3750..=3799 => LIGHT_LEVELS[3],
+                    3800..=3849 => LIGHT_LEVELS[2],
+                    3850..=3899 => LIGHT_LEVELS[1],
+                    _ => LIGHT_LEVELS[0],
+                };
             }
 
-            if self.row & 0x02 != 0 {
-                self.pins.a1.set_high();
-            } else {
-                self.pins.a1.set_low();
-            }
-
-            if self.row & 0x04 != 0 {
-                self.pins.a2.set_high();
-            } else {
-                self.pins.a2.set_low();
-            }
-
-            self.pins.oe.set_low();
-            Timer::after(Duration::from_micros(100)).await;
-            self.pins.oe.set_high();
+            pins.oe.set_low();
+            Timer::after(Duration::from_micros(sleep_duration)).await;
+            pins.oe.set_high();
+            Timer::after(Duration::from_micros(25)).await;
         }
     }
 }
@@ -915,17 +962,26 @@ pub mod display_matrix {
             match pref {
                 TimePreference::Twelve => {
                     if hour >= 12 {
-                        DISPLAY_MATRIX.hide_icon("AM");
-                        DISPLAY_MATRIX.show_icon("PM");
+                        self.hide_icon("AM");
+                        self.show_icon("PM");
                     } else {
-                        DISPLAY_MATRIX.hide_icon("PM");
-                        DISPLAY_MATRIX.show_icon("AM");
+                        self.hide_icon("PM");
+                        self.show_icon("AM");
                     }
                 }
                 TimePreference::TwentyFour => {
-                    DISPLAY_MATRIX.hide_icon("AM");
-                    DISPLAY_MATRIX.hide_icon("PM");
+                    self.hide_icon("AM");
+                    self.hide_icon("PM");
                 }
+            }
+        }
+
+        /// Show or hide the autolight icon.
+        pub fn show_autolight_icon(&self, state: bool) {
+            if state {
+                self.show_icon("AutoLight");
+            } else {
+                self.hide_icon("AutoLight");
             }
         }
 

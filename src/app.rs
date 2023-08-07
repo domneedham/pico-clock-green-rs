@@ -7,6 +7,7 @@ use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, signal::Signal};
 use crate::{
     buttons::{ButtonPress, BUTTON_ONE_PRESS, BUTTON_THREE_PRESS, BUTTON_TWO_PRESS},
     clock::ClockApp,
+    config,
     display::display_matrix::DISPLAY_MATRIX,
     pomodoro::PomodoroApp,
     settings::SettingsApp,
@@ -155,7 +156,10 @@ impl AppController {
                 }
             }
             ButtonPress::Long => self.show_app_picker().await,
-            ButtonPress::Double => {}
+            ButtonPress::Double => {
+                let state = config::CONFIG.lock().await.borrow_mut().toggle_autolight();
+                DISPLAY_MATRIX.show_autolight_icon(state);
+            }
         };
     }
 
