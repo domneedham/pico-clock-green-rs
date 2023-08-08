@@ -454,6 +454,7 @@ pub mod display_matrix {
         ///
         /// * `left` - What to show on the left side of the `:`.
         /// * `right` - What to show on the right side of the `:`.
+        /// * `colon` - What colon to show.
         /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         /// * `scroll_off_display` - Set true if you want the text to scroll off the display.
@@ -461,8 +462,8 @@ pub mod display_matrix {
         /// # Example
         ///
         /// ```rust
-        /// DISPLAY_MATRIX.queue_time(10, 30, 1000, false, false).await; // will render as 10:30 for at least 1 second.
-        /// DISPLAY_MATRIX.queue_time(5, 5, 1000, false, true).await; // will render as 05:05 for at least 1 second, then scroll all text off the display.
+        /// DISPLAY_MATRIX.queue_time(10, 30, TimeColon::Full, 1000, false, false).await; // will render as 10:30 for at least 1 second.
+        /// DISPLAY_MATRIX.queue_time(5, 5, TimeColon::Full, 1000, false, true).await; // will render as 05:05 for at least 1 second, then scroll all text off the display.
         /// ```
         pub async fn queue_time(
             &self,

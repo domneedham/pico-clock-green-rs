@@ -666,11 +666,11 @@ mod configurations {
         /// Show day configuration in blink task.
         async fn show(&self) {
             let mut text: String<16> = String::new();
-            _ = write!(text, "Hourly ring:");
+            _ = write!(text, "HR:");
             if self.state {
                 _ = write!(text, "On");
             } else {
-                _ = write!(text, "Off");
+                _ = write!(text, "Of");
             }
 
             DISPLAY_MATRIX
@@ -741,9 +741,9 @@ mod configurations {
         /// Show day configuration in blink task.
         async fn show(&self) {
             let text = match self.state {
-                TimeColonPreference::Solid => ":Solid",
-                TimeColonPreference::Blink => ":Blink",
-                TimeColonPreference::Alt => ":Alt",
+                TimeColonPreference::Solid => ":SLD",
+                TimeColonPreference::Blink => ":BLK",
+                TimeColonPreference::Alt => ":ALT",
             };
 
             DISPLAY_MATRIX.queue_text(text, 1000, true, false).await;
@@ -800,11 +800,11 @@ mod configurations {
         /// Show day configuration in blink task.
         async fn show(&self) {
             let mut text: String<16> = String::new();
-            _ = write!(text, "Scroll temp:");
+            _ = write!(text, "EX:");
             if self.state {
                 _ = write!(text, "On");
             } else {
-                _ = write!(text, "Off");
+                _ = write!(text, "Of");
             }
 
             DISPLAY_MATRIX
