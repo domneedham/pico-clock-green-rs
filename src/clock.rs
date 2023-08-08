@@ -8,7 +8,7 @@ use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
     config::{self, TimePreference},
-    display::display_matrix::DISPLAY_MATRIX,
+    display::display_matrix::{TimeColon, DISPLAY_MATRIX},
     rtc::{self},
     speaker, temperature,
 };
@@ -112,7 +112,7 @@ async fn clock() {
     let mut last_min = datetime.minute();
     let mut last_day = datetime.weekday();
 
-    show_time(last_hour, last_min, true, true).await;
+    show_time(last_hour, last_min, TimeColon::Full, true).await;
 
     DISPLAY_MATRIX.show_day_icon(last_day);
 
@@ -144,7 +144,23 @@ async fn clock() {
                 let min = datetime.minute();
                 let second = datetime.second();
 
-                show_time(hour, min, second % 2 == 0, false).await;
+                if second % 2 == 0 {
+                    if second > 30 && second < 45 {
+                        show_time(hour, min, TimeColon::Top, false).await;
+                    } else {
+                        show_time(hour, min, TimeColon::Empty, false).await;
+                    }
+                } else {
+                    if second < 15 {
+                        show_time(hour, min, TimeColon::Top, false).await;
+                    } else if second < 30 {
+                        show_time(hour, min, TimeColon::Bottom, false).await;
+                    } else if second < 45 {
+                        show_time(hour, min, TimeColon::Bottom, false).await;
+                    } else {
+                        show_time(hour, min, TimeColon::Full, false).await;
+                    }
+                }
 
                 if hour != last_hour || min != last_min {
                     if hour != last_hour {
@@ -169,7 +185,7 @@ async fn clock() {
                     last_day = day;
                 }
 
-                if second == 25 && should_scroll_temp {
+                if min % 5 == 0 && second == 25 && should_scroll_temp {
                     let temp_pref = temperature::get_temperature_preference().await;
                     let temp = temperature::get_temperature_off_preference().await;
 
@@ -199,22 +215,16 @@ async fn show_temperature() {
 }
 
 /// Show the time.
-async fn show_time(mut hour: u32, minute: u32, show_colon: bool, show_now: bool) {
+async fn show_time(mut hour: u32, minute: u32, colon: TimeColon, show_now: bool) {
     let pref = config::CONFIG.lock().await.borrow().get_time_preference();
 
     if let TimePreference::Twelve = pref {
         hour = convert_24_to_12(hour);
     }
 
-    if show_colon {
-        DISPLAY_MATRIX
-            .queue_time(hour, minute, 1, show_now, false)
-            .await;
-    } else {
-        DISPLAY_MATRIX
-            .queue_time_blink_colon(hour, minute, 1, false, false)
-            .await;
-    }
+    DISPLAY_MATRIX
+        .queue_time(hour, minute, colon, 0, show_now, false)
+        .await;
 }
 
 /// Convert 24hr time into 12hr time.

@@ -8,7 +8,7 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, ShowAppSwitcher, StopAppTasks, SHOW_APP_SWITCHER},
     buttons::ButtonPress,
-    display::display_matrix::DISPLAY_MATRIX,
+    display::display_matrix::{TimeColon, DISPLAY_MATRIX},
 };
 
 use self::configurations::{
@@ -236,13 +236,17 @@ async fn blink() {
         match blink_task {
             BlinkTask::None => {}
             BlinkTask::Hour(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, 750, true, false).await;
+                DISPLAY_MATRIX
+                    .queue_time(hour, min, TimeColon::Full, 750, true, false)
+                    .await;
                 DISPLAY_MATRIX
                     .queue_time_left_side_blink(min, 350, false)
                     .await;
             }
             BlinkTask::Minute(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, 750, true, false).await;
+                DISPLAY_MATRIX
+                    .queue_time(hour, min, TimeColon::Full, 750, true, false)
+                    .await;
                 DISPLAY_MATRIX
                     .queue_time_right_side_blink(hour, 350, false)
                     .await;

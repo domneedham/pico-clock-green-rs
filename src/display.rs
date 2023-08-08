@@ -193,6 +193,13 @@ pub mod display_matrix {
         }
     }
 
+    pub enum TimeColon {
+        Full,
+        Empty,
+        Top,
+        Bottom,
+    }
+
     /// Item to be added to the text buffer.
     struct TextBufferItem<'a> {
         /// A list of upto 32 [characters](Character).
@@ -453,6 +460,7 @@ pub mod display_matrix {
             &self,
             left: u32,
             right: u32,
+            colon: TimeColon,
             hold_end_ms: u64,
             show_now: bool,
             scroll_off_display: bool,
@@ -465,35 +473,12 @@ pub mod display_matrix {
                 _ = write!(time, "{left}");
             }
 
-            _ = write!(time, ":");
-
-            if right < 10 {
-                _ = write!(time, "0{right}");
-            } else {
-                _ = write!(time, "{right}");
+            match colon {
+                TimeColon::Full => _ = write!(time, ":"),
+                TimeColon::Empty => _ = write!(time, " "),
+                TimeColon::Top => _ = write!(time, "±"),
+                TimeColon::Bottom => _ = write!(time, "§"),
             }
-
-            self.queue_text(time.as_str(), hold_end_ms, show_now, scroll_off_display)
-                .await;
-        }
-
-        pub async fn queue_time_blink_colon(
-            &self,
-            left: u32,
-            right: u32,
-            hold_end_ms: u64,
-            show_now: bool,
-            scroll_off_display: bool,
-        ) {
-            let mut time = String::<8>::new();
-
-            if left < 10 {
-                _ = write!(time, "0{left}");
-            } else {
-                _ = write!(time, "{left}");
-            }
-
-            _ = write!(time, " ");
 
             if right < 10 {
                 _ = write!(time, "0{right}");
@@ -1070,7 +1055,7 @@ mod text {
     }
 
     /// All supported characters lookup table.
-    const CHARACTER_TABLE: [(char, Character); 43] = [
+    const CHARACTER_TABLE: [(char, Character); 45] = [
         (
             '0',
             Character::new(&4, &[0x06, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
@@ -1218,6 +1203,16 @@ mod text {
         (
             ':',
             Character::new(&2, &[0x00, 0x03, 0x03, 0x00, 0x03, 0x03, 0x00]),
+        ),
+        // top half of a : only
+        (
+            '±',
+            Character::new(&2, &[0x00, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00]),
+        ),
+        // bottom half of a : only
+        (
+            '§',
+            Character::new(&2, &[0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00]),
         ),
         (
             ' ',

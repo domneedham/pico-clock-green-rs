@@ -11,7 +11,7 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
-    display::display_matrix::DISPLAY_MATRIX,
+    display::display_matrix::{TimeColon, DISPLAY_MATRIX},
     speaker::{self, SoundType},
 };
 
@@ -223,7 +223,7 @@ async fn set_running(running: RunningState) {
 async fn show_time() {
     let (minutes, seconds) = get_time().await;
     DISPLAY_MATRIX
-        .queue_time(minutes, seconds, 0, true, false)
+        .queue_time(minutes, seconds, TimeColon::Full, 0, true, false)
         .await;
 }
 
