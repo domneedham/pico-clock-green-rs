@@ -799,10 +799,13 @@ pub mod display_matrix {
 
             for c in &item.text {
                 total_width += c.width;
+                total_width += 1;
             }
 
+            info!("Total width: {}", total_width);
+
             // if width is greater than matrix size with whitespace accounted for
-            if total_width < Self::LAST_INDEX - (item.text.len() * 2) {
+            if total_width < Self::LAST_INDEX - 2 {
                 critical_section::with(|cs| {
                     self.clear(cs, false);
                 });
@@ -823,7 +826,7 @@ pub mod display_matrix {
                 pos += 2;
 
                 // if the position is greater than the last possible index and the total width is also greater (this won't be true for perfect fit items)
-                if pos >= Self::LAST_INDEX && total_width > Self::LAST_INDEX {
+                if pos >= Self::LAST_INDEX && total_width >= Self::LAST_INDEX {
                     self.shift_text_left(true);
                 }
             }
@@ -1031,6 +1034,10 @@ pub mod display_matrix {
                     Err(_) => break,
                 }
             }
+
+            critical_section::with(|cs| {
+                DISPLAY_MATRIX.clear(cs, false);
+            });
         }
     }
 }
