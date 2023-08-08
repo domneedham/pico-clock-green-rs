@@ -180,12 +180,10 @@ async fn clock() {
                             } else {
                                 show_time(hour, min, TimeColon::Bottom, false).await;
                             }
+                        } else if second % 2 == 0 {
+                            show_time(hour, min, TimeColon::Empty, false).await;
                         } else {
-                            if second % 2 == 0 {
-                                show_time(hour, min, TimeColon::Empty, false).await;
-                            } else {
-                                show_time(hour, min, TimeColon::Full, false).await;
-                            }
+                            show_time(hour, min, TimeColon::Full, false).await;
                         }
                     }
                 };

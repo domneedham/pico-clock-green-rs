@@ -193,10 +193,18 @@ pub mod display_matrix {
         }
     }
 
+    /// The type of colon to use when showing the time.
     pub enum TimeColon {
+        /// Display a full colon.
         Full,
+
+        /// Display nothing.
         Empty,
+
+        /// Display top half of a colon.
         Top,
+
+        /// Display bottom half of a colon.
         Bottom,
     }
 
