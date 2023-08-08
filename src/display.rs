@@ -802,8 +802,6 @@ pub mod display_matrix {
                 total_width += 1;
             }
 
-            info!("Total width: {}", total_width);
-
             // if width is greater than matrix size with whitespace accounted for
             if total_width < Self::LAST_INDEX - 2 {
                 critical_section::with(|cs| {

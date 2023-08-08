@@ -132,6 +132,12 @@ async fn clock() {
     let temp_pref = temperature::get_temperature_preference().await;
     DISPLAY_MATRIX.show_temperature_icon(temp_pref);
 
+    let colon_pref = config::CONFIG
+        .lock()
+        .await
+        .borrow()
+        .get_time_colon_preference();
+
     loop {
         let res = select(sub.next_message(), Timer::after(Duration::from_secs(1))).await;
 
@@ -144,23 +150,45 @@ async fn clock() {
                 let min = datetime.minute();
                 let second = datetime.second();
 
-                if second % 2 == 0 {
-                    if second > 30 && second < 45 {
-                        show_time(hour, min, TimeColon::Top, false).await;
-                    } else {
-                        show_time(hour, min, TimeColon::Empty, false).await;
+                match colon_pref {
+                    config::TimeColonPreference::Solid => {
+                        show_time(hour, min, TimeColon::Full, false).await
                     }
-                } else {
-                    if second < 15 {
-                        show_time(hour, min, TimeColon::Top, false).await;
-                    } else if second < 30 {
-                        show_time(hour, min, TimeColon::Bottom, false).await;
-                    } else if second < 45 {
-                        show_time(hour, min, TimeColon::Bottom, false).await;
-                    } else {
-                        show_time(hour, min, TimeColon::Full, false).await;
+                    config::TimeColonPreference::Blink => {
+                        if second % 2 == 0 {
+                            show_time(hour, min, TimeColon::Empty, false).await;
+                        } else {
+                            show_time(hour, min, TimeColon::Full, false).await;
+                        }
                     }
-                }
+                    config::TimeColonPreference::Alt => {
+                        if second < 15 {
+                            if second % 2 == 0 {
+                                show_time(hour, min, TimeColon::Empty, false).await;
+                            } else {
+                                show_time(hour, min, TimeColon::Top, false).await;
+                            }
+                        } else if second < 30 {
+                            if second % 2 == 0 {
+                                show_time(hour, min, TimeColon::Empty, false).await;
+                            } else {
+                                show_time(hour, min, TimeColon::Bottom, false).await;
+                            }
+                        } else if second < 45 {
+                            if second % 2 == 0 {
+                                show_time(hour, min, TimeColon::Top, false).await;
+                            } else {
+                                show_time(hour, min, TimeColon::Bottom, false).await;
+                            }
+                        } else {
+                            if second % 2 == 0 {
+                                show_time(hour, min, TimeColon::Empty, false).await;
+                            } else {
+                                show_time(hour, min, TimeColon::Full, false).await;
+                            }
+                        }
+                    }
+                };
 
                 if hour != last_hour || min != last_min {
                     if hour != last_hour {
