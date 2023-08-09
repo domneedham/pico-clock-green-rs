@@ -96,7 +96,7 @@ pub async fn update_matrix(mut pins: DisplayPins<'static>) {
             pins.a2.set_low();
         }
 
-        Timer::after(Duration::from_millis(1)).await;
+        Timer::after(Duration::from_micros(900)).await;
     }
 }
 
@@ -191,6 +191,21 @@ pub mod display_matrix {
 
             select(DISPLAY_MATRIX.show_text(item), CANCEL_SIGNAL.wait()).await;
         }
+    }
+
+    /// The type of colon to use when showing the time.
+    pub enum TimeColon {
+        /// Display a full colon.
+        Full,
+
+        /// Display nothing.
+        Empty,
+
+        /// Display top half of a colon.
+        Top,
+
+        /// Display bottom half of a colon.
+        Bottom,
     }
 
     /// Item to be added to the text buffer.
@@ -439,6 +454,7 @@ pub mod display_matrix {
         ///
         /// * `left` - What to show on the left side of the `:`.
         /// * `right` - What to show on the right side of the `:`.
+        /// * `colon` - What colon to show.
         /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         /// * `scroll_off_display` - Set true if you want the text to scroll off the display.
@@ -446,13 +462,14 @@ pub mod display_matrix {
         /// # Example
         ///
         /// ```rust
-        /// DISPLAY_MATRIX.queue_time(10, 30, 1000, false, false).await; // will render as 10:30 for at least 1 second.
-        /// DISPLAY_MATRIX.queue_time(5, 5, 1000, false, true).await; // will render as 05:05 for at least 1 second, then scroll all text off the display.
+        /// DISPLAY_MATRIX.queue_time(10, 30, TimeColon::Full, 1000, false, false).await; // will render as 10:30 for at least 1 second.
+        /// DISPLAY_MATRIX.queue_time(5, 5, TimeColon::Full, 1000, false, true).await; // will render as 05:05 for at least 1 second, then scroll all text off the display.
         /// ```
         pub async fn queue_time(
             &self,
             left: u32,
             right: u32,
+            colon: TimeColon,
             hold_end_ms: u64,
             show_now: bool,
             scroll_off_display: bool,
@@ -465,7 +482,12 @@ pub mod display_matrix {
                 _ = write!(time, "{left}");
             }
 
-            _ = write!(time, ":");
+            match colon {
+                TimeColon::Full => _ = write!(time, ":"),
+                TimeColon::Empty => _ = write!(time, " "),
+                TimeColon::Top => _ = write!(time, "±"),
+                TimeColon::Bottom => _ = write!(time, "§"),
+            }
 
             if right < 10 {
                 _ = write!(time, "0{right}");
@@ -782,14 +804,18 @@ pub mod display_matrix {
         ///
         /// Responsible for moving items on the display left (animation) if the position of the last item is at the end of the display.
         async fn show_text(&self, item: TextBufferItem<'_>) {
-            critical_section::with(|cs| {
-                self.clear(cs, false);
-            });
-
             let mut total_width = 0;
 
             for c in &item.text {
                 total_width += c.width;
+                total_width += 1;
+            }
+
+            // if width is greater than matrix size with whitespace accounted for
+            if total_width < Self::LAST_INDEX - 2 {
+                critical_section::with(|cs| {
+                    self.clear(cs, false);
+                });
             }
 
             let mut pos = item.start_position;
@@ -807,7 +833,7 @@ pub mod display_matrix {
                 pos += 2;
 
                 // if the position is greater than the last possible index and the total width is also greater (this won't be true for perfect fit items)
-                if pos >= Self::LAST_INDEX && total_width > Self::LAST_INDEX {
+                if pos >= Self::LAST_INDEX && total_width >= Self::LAST_INDEX {
                     self.shift_text_left(true);
                 }
             }
@@ -1015,6 +1041,10 @@ pub mod display_matrix {
                     Err(_) => break,
                 }
             }
+
+            critical_section::with(|cs| {
+                DISPLAY_MATRIX.clear(cs, false);
+            });
         }
     }
 }
@@ -1039,7 +1069,7 @@ mod text {
     }
 
     /// All supported characters lookup table.
-    const CHARACTER_TABLE: [(char, Character); 43] = [
+    const CHARACTER_TABLE: [(char, Character); 45] = [
         (
             '0',
             Character::new(&4, &[0x06, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
@@ -1187,6 +1217,16 @@ mod text {
         (
             ':',
             Character::new(&2, &[0x00, 0x03, 0x03, 0x00, 0x03, 0x03, 0x00]),
+        ),
+        // top half of a : only
+        (
+            '±',
+            Character::new(&2, &[0x00, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00]),
+        ),
+        // bottom half of a : only
+        (
+            '§',
+            Character::new(&2, &[0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00]),
         ),
         (
             ' ',

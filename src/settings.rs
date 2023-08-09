@@ -8,12 +8,13 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, ShowAppSwitcher, StopAppTasks, SHOW_APP_SWITCHER},
     buttons::ButtonPress,
-    display::display_matrix::DISPLAY_MATRIX,
+    display::display_matrix::{TimeColon, DISPLAY_MATRIX},
 };
 
 use self::configurations::{
     AutoScrollTempConfiguration, Configuration, DayConfiguration, HourConfiguration,
-    HourlyRingConfiguration, MinuteConfiguration, MonthConfiguration, YearConfiguration,
+    HourlyRingConfiguration, MinuteConfiguration, MonthConfiguration, TimeColonConfiguration,
+    YearConfiguration,
 };
 
 /// Each of the possible configurations to run through in the settings app.
@@ -35,6 +36,9 @@ enum SettingsConfig {
 
     /// Modify the hourly ring setting.
     HourlyRing,
+
+    /// Modify the time colon setting.
+    TimeColon,
 
     /// Modify the auto scrolling of temperature setting.
     AutoScrollTemp,
@@ -95,6 +99,9 @@ pub struct SettingsApp {
     /// The hourly ring configuration mini app.
     hourly_ring_config: configurations::HourlyRingConfiguration,
 
+    /// The time colon configuration mini app.
+    time_colon_config: configurations::TimeColonConfiguration,
+
     /// The auto scroll temp configuration mini app.
     auto_scroll_temp_config: configurations::AutoScrollTempConfiguration,
 
@@ -112,6 +119,7 @@ impl SettingsApp {
             month_config: MonthConfiguration::new(),
             day_config: DayConfiguration::new(),
             hourly_ring_config: HourlyRingConfiguration::new(),
+            time_colon_config: TimeColonConfiguration::new(),
             auto_scroll_temp_config: AutoScrollTempConfiguration::new(),
             active_config: SettingsConfig::Hour,
         }
@@ -169,6 +177,11 @@ impl App for SettingsApp {
             }
             SettingsConfig::HourlyRing => {
                 self.hourly_ring_config.save().await;
+                self.active_config = SettingsConfig::TimeColon;
+                self.time_colon_config.start().await;
+            }
+            SettingsConfig::TimeColon => {
+                self.time_colon_config.save().await;
                 self.active_config = SettingsConfig::AutoScrollTemp;
                 self.auto_scroll_temp_config.start().await;
             }
@@ -189,6 +202,7 @@ impl App for SettingsApp {
             SettingsConfig::Month => self.month_config.button_two_press(press).await,
             SettingsConfig::Day => self.day_config.button_two_press(press).await,
             SettingsConfig::HourlyRing => self.hourly_ring_config.button_two_press(press).await,
+            SettingsConfig::TimeColon => self.time_colon_config.button_two_press(press).await,
             SettingsConfig::AutoScrollTemp => {
                 self.auto_scroll_temp_config.button_two_press(press).await
             }
@@ -202,7 +216,8 @@ impl App for SettingsApp {
             SettingsConfig::Year => self.year_config.button_three_press(press).await,
             SettingsConfig::Month => self.month_config.button_three_press(press).await,
             SettingsConfig::Day => self.day_config.button_three_press(press).await,
-            SettingsConfig::HourlyRing => self.hourly_ring_config.button_three_press(press).await,
+            SettingsConfig::HourlyRing => self.hourly_ring_config.button_two_press(press).await,
+            SettingsConfig::TimeColon => self.time_colon_config.button_three_press(press).await,
             SettingsConfig::AutoScrollTemp => {
                 self.auto_scroll_temp_config.button_three_press(press).await
             }
@@ -236,13 +251,17 @@ async fn blink() {
         match blink_task {
             BlinkTask::None => {}
             BlinkTask::Hour(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, 750, true, false).await;
+                DISPLAY_MATRIX
+                    .queue_time(hour, min, TimeColon::Full, 750, true, false)
+                    .await;
                 DISPLAY_MATRIX
                     .queue_time_left_side_blink(min, 350, false)
                     .await;
             }
             BlinkTask::Minute(hour, min) => {
-                DISPLAY_MATRIX.queue_time(hour, min, 750, true, false).await;
+                DISPLAY_MATRIX
+                    .queue_time(hour, min, TimeColon::Full, 750, true, false)
+                    .await;
                 DISPLAY_MATRIX
                     .queue_time_right_side_blink(hour, 350, false)
                     .await;
@@ -285,7 +304,12 @@ mod configurations {
     use core::fmt::Write;
     use heapless::String;
 
-    use crate::{buttons::ButtonPress, config, display::display_matrix::DISPLAY_MATRIX, rtc};
+    use crate::{
+        buttons::ButtonPress,
+        config::{self, TimeColonPreference},
+        display::display_matrix::DISPLAY_MATRIX,
+        rtc,
+    };
 
     use super::SETTINGS_DISPLAY_QUEUE;
 
@@ -642,16 +666,87 @@ mod configurations {
         /// Show day configuration in blink task.
         async fn show(&self) {
             let mut text: String<16> = String::new();
-            _ = write!(text, "Hourly ring:");
+            _ = write!(text, "HR:");
             if self.state {
                 _ = write!(text, "On");
             } else {
-                _ = write!(text, "Off");
+                _ = write!(text, "Of");
             }
 
             DISPLAY_MATRIX
                 .queue_text(text.as_str(), 1000, true, false)
                 .await;
+        }
+    }
+
+    /// RTC day configuration.
+    pub struct TimeColonConfiguration {
+        /// The ring state.
+        state: TimeColonPreference,
+
+        /// The state set when starting configuration.
+        starting_state: TimeColonPreference,
+    }
+
+    impl Configuration for TimeColonConfiguration {
+        async fn start(&mut self) {
+            SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
+            self.state = config::CONFIG
+                .lock()
+                .await
+                .borrow()
+                .get_time_colon_preference();
+            self.starting_state = self.state;
+            self.show().await;
+        }
+
+        async fn save(&mut self) {
+            if self.state != self.starting_state {
+                config::CONFIG
+                    .lock()
+                    .await
+                    .borrow_mut()
+                    .set_time_colon_preference(self.state);
+            }
+        }
+
+        async fn button_two_press(&mut self, _: ButtonPress) {
+            match self.state {
+                TimeColonPreference::Solid => self.state = TimeColonPreference::Blink,
+                TimeColonPreference::Blink => self.state = TimeColonPreference::Alt,
+                TimeColonPreference::Alt => self.state = TimeColonPreference::Solid,
+            }
+            self.show().await;
+        }
+
+        async fn button_three_press(&mut self, _: ButtonPress) {
+            match self.state {
+                TimeColonPreference::Solid => self.state = TimeColonPreference::Alt,
+                TimeColonPreference::Blink => self.state = TimeColonPreference::Solid,
+                TimeColonPreference::Alt => self.state = TimeColonPreference::Blink,
+            }
+            self.show().await;
+        }
+    }
+
+    impl TimeColonConfiguration {
+        /// Create a new day configuration.
+        pub fn new() -> Self {
+            Self {
+                state: TimeColonPreference::Blink,
+                starting_state: TimeColonPreference::Blink,
+            }
+        }
+
+        /// Show day configuration in blink task.
+        async fn show(&self) {
+            let text = match self.state {
+                TimeColonPreference::Solid => ":SLD",
+                TimeColonPreference::Blink => ":BLK",
+                TimeColonPreference::Alt => ":ALT",
+            };
+
+            DISPLAY_MATRIX.queue_text(text, 1000, true, false).await;
         }
     }
 
@@ -705,11 +800,11 @@ mod configurations {
         /// Show day configuration in blink task.
         async fn show(&self) {
             let mut text: String<16> = String::new();
-            _ = write!(text, "Scroll temp:");
+            _ = write!(text, "EX:");
             if self.state {
                 _ = write!(text, "On");
             } else {
-                _ = write!(text, "Off");
+                _ = write!(text, "Of");
             }
 
             DISPLAY_MATRIX

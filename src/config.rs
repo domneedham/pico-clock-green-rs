@@ -22,10 +22,26 @@ pub enum TimePreference {
     TwentyFour,
 }
 
+/// Time colon preference representation.
+#[derive(Copy, Clone, PartialEq)]
+pub enum TimeColonPreference {
+    /// Do not blink the colon.
+    Solid,
+
+    /// Blink the colon.
+    Blink,
+
+    /// Show the alternate blinking colon.
+    Alt,
+}
+
 /// Manage active configuration.
 pub struct Config {
     /// Whether the clock should beep on the hour.
     hourly_ring: bool,
+
+    /// The users colon blinking preference.
+    time_colon_pref: TimeColonPreference,
 
     /// The users temperature reporting preference.
     temp_pref: TemperaturePreference,
@@ -45,6 +61,7 @@ impl Config {
     pub const fn new() -> Self {
         Self {
             hourly_ring: false,
+            time_colon_pref: TimeColonPreference::Blink,
             temp_pref: TemperaturePreference::Celcius,
             auto_scroll_temp: true,
             time_pref: TimePreference::TwentyFour,
@@ -60,6 +77,16 @@ impl Config {
     /// Set the hourly ring state.
     pub fn set_hourly_ring(&mut self, new_state: bool) {
         self.hourly_ring = new_state;
+    }
+
+    /// Get the time colon preference.
+    pub fn get_time_colon_preference(&self) -> TimeColonPreference {
+        self.time_colon_pref
+    }
+
+    /// Set the users time colon preference.
+    pub fn set_time_colon_preference(&mut self, new_state: TimeColonPreference) {
+        self.time_colon_pref = new_state;
     }
 
     /// Get the users temperature preference.

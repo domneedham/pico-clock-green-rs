@@ -8,7 +8,7 @@ use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
     config::{self, TimePreference},
-    display::display_matrix::DISPLAY_MATRIX,
+    display::display_matrix::{TimeColon, DISPLAY_MATRIX},
     rtc::{self},
     speaker, temperature,
 };
@@ -47,8 +47,6 @@ impl App for ClockApp {
         match press {
             ButtonPress::Short => {
                 show_temperature().await;
-                let datetime = rtc::get_datetime().await;
-                show_time(datetime.hour(), datetime.minute(), false).await;
             }
             ButtonPress::Long => {
                 config::CONFIG
@@ -74,7 +72,6 @@ impl App for ClockApp {
                 let time_pref = config::CONFIG.lock().await.borrow().get_time_preference();
                 let datetime = rtc::get_datetime().await;
                 DISPLAY_MATRIX.show_time_icon(time_pref, datetime.hour());
-                show_time(datetime.hour(), datetime.minute(), true).await;
             }
         }
     }
@@ -115,7 +112,7 @@ async fn clock() {
     let mut last_min = datetime.minute();
     let mut last_day = datetime.weekday();
 
-    show_time(last_hour, last_min, true).await;
+    show_time(last_hour, last_min, TimeColon::Full, true).await;
 
     DISPLAY_MATRIX.show_day_icon(last_day);
 
@@ -135,6 +132,12 @@ async fn clock() {
     let temp_pref = temperature::get_temperature_preference().await;
     DISPLAY_MATRIX.show_temperature_icon(temp_pref);
 
+    let colon_pref = config::CONFIG
+        .lock()
+        .await
+        .borrow()
+        .get_time_colon_preference();
+
     loop {
         let res = select(sub.next_message(), Timer::after(Duration::from_secs(1))).await;
 
@@ -145,9 +148,47 @@ async fn clock() {
 
                 let hour = datetime.hour();
                 let min = datetime.minute();
-                if hour != last_hour || min != last_min {
-                    show_time(hour, min, false).await;
+                let second = datetime.second();
 
+                match colon_pref {
+                    config::TimeColonPreference::Solid => {
+                        show_time(hour, min, TimeColon::Full, false).await
+                    }
+                    config::TimeColonPreference::Blink => {
+                        if second % 2 == 0 {
+                            show_time(hour, min, TimeColon::Empty, false).await;
+                        } else {
+                            show_time(hour, min, TimeColon::Full, false).await;
+                        }
+                    }
+                    config::TimeColonPreference::Alt => {
+                        if second < 15 {
+                            if second % 2 == 0 {
+                                show_time(hour, min, TimeColon::Empty, false).await;
+                            } else {
+                                show_time(hour, min, TimeColon::Top, false).await;
+                            }
+                        } else if second < 30 {
+                            if second % 2 == 0 {
+                                show_time(hour, min, TimeColon::Empty, false).await;
+                            } else {
+                                show_time(hour, min, TimeColon::Bottom, false).await;
+                            }
+                        } else if second < 45 {
+                            if second % 2 == 0 {
+                                show_time(hour, min, TimeColon::Top, false).await;
+                            } else {
+                                show_time(hour, min, TimeColon::Bottom, false).await;
+                            }
+                        } else if second % 2 == 0 {
+                            show_time(hour, min, TimeColon::Empty, false).await;
+                        } else {
+                            show_time(hour, min, TimeColon::Full, false).await;
+                        }
+                    }
+                };
+
+                if hour != last_hour || min != last_min {
                     if hour != last_hour {
                         if hour == 0 || hour == 12 {
                             let time_pref =
@@ -170,8 +211,7 @@ async fn clock() {
                     last_day = day;
                 }
 
-                let second = datetime.second();
-                if second == 25 && should_scroll_temp {
+                if min % 5 == 0 && second == 25 && should_scroll_temp {
                     let temp_pref = temperature::get_temperature_preference().await;
                     let temp = temperature::get_temperature_off_preference().await;
 
@@ -184,7 +224,6 @@ async fn clock() {
                     DISPLAY_MATRIX
                         .queue_time_temperature(hour, min, temp, temp_pref, false)
                         .await;
-                    show_time(hour, min, false).await;
                 }
             }
         }
@@ -202,7 +241,7 @@ async fn show_temperature() {
 }
 
 /// Show the time.
-async fn show_time(mut hour: u32, minute: u32, show_now: bool) {
+async fn show_time(mut hour: u32, minute: u32, colon: TimeColon, show_now: bool) {
     let pref = config::CONFIG.lock().await.borrow().get_time_preference();
 
     if let TimePreference::Twelve = pref {
@@ -210,7 +249,7 @@ async fn show_time(mut hour: u32, minute: u32, show_now: bool) {
     }
 
     DISPLAY_MATRIX
-        .queue_time(hour, minute, 1000, show_now, false)
+        .queue_time(hour, minute, colon, 0, show_now, false)
         .await;
 }
 
