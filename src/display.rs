@@ -833,7 +833,7 @@ pub mod display_matrix {
                 pos += 2;
 
                 // if the position is greater than the last possible index and the total width is also greater (this won't be true for perfect fit items)
-                if pos >= Self::LAST_INDEX && total_width >= Self::LAST_INDEX {
+                if pos > Self::LAST_INDEX && total_width >= Self::LAST_INDEX {
                     self.shift_text_left(true);
                 }
             }
@@ -843,7 +843,7 @@ pub mod display_matrix {
             if item.scroll_off_display {
                 while pos > Self::DISPLAY_OFFSET {
                     self.shift_text_left(false);
-                    Timer::after(Duration::from_millis(300)).await;
+                    Timer::after(Duration::from_millis(150)).await;
                     pos -= 1;
                 }
             }
@@ -866,7 +866,7 @@ pub mod display_matrix {
                 if pos > Self::LAST_INDEX {
                     // if first time hitting end of display, pause for better readability
                     if !hit_end_of_display {
-                        Timer::after(Duration::from_millis(300)).await;
+                        Timer::after(Duration::from_millis(150)).await;
                         hit_end_of_display = true;
                     }
 
@@ -874,7 +874,7 @@ pub mod display_matrix {
 
                     self.shift_text_left(false);
 
-                    Timer::after(Duration::from_millis(300)).await;
+                    Timer::after(Duration::from_millis(150)).await;
 
                     // grab matrix again after update
                     matrix = critical_section::with(|cs| *self.0.borrow_ref(cs));
@@ -1069,7 +1069,7 @@ mod text {
     }
 
     /// All supported characters lookup table.
-    const CHARACTER_TABLE: [(char, Character); 45] = [
+    const CHARACTER_TABLE: [(char, Character); 46] = [
         (
             '0',
             Character::new(&4, &[0x06, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
@@ -1208,7 +1208,7 @@ mod text {
         ),
         (
             'Y',
-            Character::new(&4, &[0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04]),
+            Character::new(&5, &[0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04]),
         ),
         (
             'Z',
@@ -1247,6 +1247,10 @@ mod text {
         (
             '/',
             Character::new(&2, &[0x02, 0x02, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01]),
+        ),
+        (
+            '+',
+            Character::new(&5, &[0x00, 0x04, 0x04, 0x1F, 0x04, 0x04, 0x00]),
         ),
         // empty space
         (
