@@ -157,7 +157,13 @@ impl AppController {
             }
             ButtonPress::Long => self.show_app_picker().await,
             ButtonPress::Double => {
-                let state = config::CONFIG.lock().await.borrow_mut().toggle_autolight();
+                let state = config::CONFIG
+                    .lock()
+                    .await
+                    .borrow_mut()
+                    .as_mut()
+                    .unwrap()
+                    .toggle_autolight();
                 DISPLAY_MATRIX.show_autolight_icon(state);
             }
         };

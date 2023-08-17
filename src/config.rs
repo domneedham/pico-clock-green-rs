@@ -1,6 +1,11 @@
 use core::cell::RefCell;
 
+use defmt::info;
+use embassy_rp::flash::{Async, Flash, ERASE_SIZE};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
+
+pub const FLASH_SIZE: usize = 2 * 1024 * 1024;
+const ADDR_OFFSET: u32 = 0x100000;
 
 /// Temperature preference representation.
 #[derive(Copy, Clone)]
@@ -57,8 +62,15 @@ pub struct Config {
 }
 
 impl Config {
-    /// Create a new default config.
-    pub const fn new() -> Self {
+    /// Init the config.
+    pub async fn new(
+        mut flash: Flash<'static, embassy_rp::peripherals::FLASH, Async, FLASH_SIZE>,
+    ) -> Self {
+        let mut read_buf = [0u8; ERASE_SIZE];
+        flash.write(ADDR_OFFSET, "Hello world".as_bytes()).unwrap();
+        flash.read(ADDR_OFFSET, &mut read_buf).unwrap();
+        info!("Contents start with {=[u8]}", read_buf);
+
         Self {
             hourly_ring: false,
             time_colon_pref: TimeColonPreference::Blink,
@@ -158,5 +170,10 @@ impl Config {
 }
 
 /// Static reference to the config so it can be accessed by all otehr apps.
-pub static CONFIG: Mutex<ThreadModeRawMutex, RefCell<Config>> =
-    Mutex::new(RefCell::new(Config::new()));
+pub static CONFIG: Mutex<ThreadModeRawMutex, RefCell<Option<Config>>> =
+    Mutex::new(RefCell::new(None));
+
+pub async fn init(flash: Flash<'static, embassy_rp::peripherals::FLASH, Async, FLASH_SIZE>) {
+    let config = Config::new(flash).await;
+    CONFIG.lock().await.replace(Some(config));
+}

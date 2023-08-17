@@ -628,7 +628,13 @@ mod configurations {
     impl Configuration for HourlyRingConfiguration {
         async fn start(&mut self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
-            self.state = config::CONFIG.lock().await.borrow().get_hourly_ring();
+            self.state = config::CONFIG
+                .lock()
+                .await
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .get_hourly_ring();
             self.starting_state = self.state;
             self.show().await;
         }
@@ -639,6 +645,8 @@ mod configurations {
                     .lock()
                     .await
                     .borrow_mut()
+                    .as_mut()
+                    .unwrap()
                     .set_hourly_ring(self.state);
             }
         }
@@ -695,6 +703,8 @@ mod configurations {
                 .lock()
                 .await
                 .borrow()
+                .as_ref()
+                .unwrap()
                 .get_time_colon_preference();
             self.starting_state = self.state;
             self.show().await;
@@ -706,6 +716,8 @@ mod configurations {
                     .lock()
                     .await
                     .borrow_mut()
+                    .as_mut()
+                    .unwrap()
                     .set_time_colon_preference(self.state);
             }
         }
@@ -762,7 +774,13 @@ mod configurations {
     impl Configuration for AutoScrollTempConfiguration {
         async fn start(&mut self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
-            self.state = config::CONFIG.lock().await.borrow().get_auto_scroll_temp();
+            self.state = config::CONFIG
+                .lock()
+                .await
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .get_auto_scroll_temp();
             self.starting_state = self.state;
             self.show().await;
         }
@@ -773,6 +791,8 @@ mod configurations {
                     .lock()
                     .await
                     .borrow_mut()
+                    .as_mut()
+                    .unwrap()
                     .set_auto_scroll_temp(self.state);
             }
         }

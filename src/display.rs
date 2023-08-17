@@ -145,7 +145,13 @@ pub mod backlight {
         loop {
             let now_time = Instant::now();
             if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1)
-                && config::CONFIG.lock().await.borrow().get_autolight()
+                && config::CONFIG
+                    .lock()
+                    .await
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .get_autolight()
             {
                 last_backlight_read = now_time;
                 let level_read = pins.adc.read(&mut pins.ain).await.unwrap();
