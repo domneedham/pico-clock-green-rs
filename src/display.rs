@@ -96,7 +96,7 @@ pub async fn update_matrix(mut pins: DisplayPins<'static>) {
             pins.a2.set_low();
         }
 
-        Timer::after(Duration::from_micros(900)).await;
+        Timer::after(Duration::from_millis(1)).await;
     }
 }
 
@@ -250,6 +250,9 @@ pub mod display_matrix {
 
         /// The last column that can be rendered.
         pub const LAST_INDEX: usize = 24;
+
+        /// The delay between shifting the display items left.
+        pub const SCROLL_DELAY: u64 = 150;
 
         /// Clear the entire display. Includes icons.
         ///
@@ -838,12 +841,20 @@ pub mod display_matrix {
                 }
             }
 
-            Timer::after(Duration::from_millis(item.hold_end_ms)).await;
+            // set end hold to same time as scroll interval if scrolling off display
+            // and hold is less than 0 (it looks jumpy otherwise)
+            let hold_end_ms = if item.hold_end_ms < Self::SCROLL_DELAY && item.scroll_off_display {
+                Self::SCROLL_DELAY
+            } else {
+                item.hold_end_ms
+            };
+
+            Timer::after(Duration::from_millis(hold_end_ms)).await;
 
             if item.scroll_off_display {
                 while pos > Self::DISPLAY_OFFSET {
                     self.shift_text_left(false);
-                    Timer::after(Duration::from_millis(150)).await;
+                    Timer::after(Duration::from_millis(Self::SCROLL_DELAY)).await;
                     pos -= 1;
                 }
             }
@@ -866,7 +877,7 @@ pub mod display_matrix {
                 if pos > Self::LAST_INDEX {
                     // if first time hitting end of display, pause for better readability
                     if !hit_end_of_display {
-                        Timer::after(Duration::from_millis(150)).await;
+                        Timer::after(Duration::from_millis(Self::SCROLL_DELAY)).await;
                         hit_end_of_display = true;
                     }
 
@@ -874,7 +885,7 @@ pub mod display_matrix {
 
                     self.shift_text_left(false);
 
-                    Timer::after(Duration::from_millis(150)).await;
+                    Timer::after(Duration::from_millis(Self::SCROLL_DELAY)).await;
 
                     // grab matrix again after update
                     matrix = critical_section::with(|cs| *self.0.borrow_ref(cs));
