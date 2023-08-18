@@ -306,7 +306,7 @@ mod configurations {
 
     use crate::{
         buttons::ButtonPress,
-        config::{self, TimeColonPreference},
+        config::{self, ReadAndSaveConfig, TimeColonPreference},
         display::display_matrix::DISPLAY_MATRIX,
         rtc,
     };
@@ -631,8 +631,8 @@ mod configurations {
             self.state = config::CONFIG
                 .lock()
                 .await
-                .borrow()
-                .as_ref()
+                .borrow_mut()
+                .as_mut()
                 .unwrap()
                 .get_hourly_ring();
             self.starting_state = self.state;
@@ -702,8 +702,8 @@ mod configurations {
             self.state = config::CONFIG
                 .lock()
                 .await
-                .borrow()
-                .as_ref()
+                .borrow_mut()
+                .as_mut()
                 .unwrap()
                 .get_time_colon_preference();
             self.starting_state = self.state;
@@ -777,8 +777,8 @@ mod configurations {
             self.state = config::CONFIG
                 .lock()
                 .await
-                .borrow()
-                .as_ref()
+                .borrow_mut()
+                .as_mut()
                 .unwrap()
                 .get_auto_scroll_temp();
             self.starting_state = self.state;

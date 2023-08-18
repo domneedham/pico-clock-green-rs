@@ -108,7 +108,7 @@ pub mod backlight {
     };
     use embassy_time::{Duration, Instant, Timer};
 
-    use crate::config;
+    use crate::config::{self, ReadAndSaveConfig};
 
     /// List of sleep durations, where higher numbers are brighter outputs.
     const LIGHT_LEVELS: [u64; 5] = [10, 100, 300, 700, 1000];
@@ -148,8 +148,8 @@ pub mod backlight {
                 && config::CONFIG
                     .lock()
                     .await
-                    .borrow()
-                    .as_ref()
+                    .borrow_mut()
+                    .as_mut()
                     .unwrap()
                     .get_autolight()
             {

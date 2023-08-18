@@ -7,7 +7,7 @@ use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, signal::Signal};
 use crate::{
     buttons::{ButtonPress, BUTTON_ONE_PRESS, BUTTON_THREE_PRESS, BUTTON_TWO_PRESS},
     clock::ClockApp,
-    config,
+    config::{self, ReadAndSaveConfig},
     display::display_matrix::DISPLAY_MATRIX,
     pomodoro::PomodoroApp,
     settings::SettingsApp,

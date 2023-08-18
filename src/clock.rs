@@ -7,7 +7,7 @@ use embassy_time::{Duration, Timer};
 use crate::{
     app::{App, StopAppTasks},
     buttons::ButtonPress,
-    config::{self, TimePreference},
+    config::{self, ReadAndSaveConfig, TimePreference},
     display::display_matrix::{TimeColon, DISPLAY_MATRIX},
     rtc::{self},
     speaker, temperature,
@@ -60,8 +60,8 @@ impl App for ClockApp {
                 let temp_pref = config::CONFIG
                     .lock()
                     .await
-                    .borrow()
-                    .as_ref()
+                    .borrow_mut()
+                    .as_mut()
                     .unwrap()
                     .get_temperature_preference();
                 DISPLAY_MATRIX.show_temperature_icon(temp_pref);
@@ -78,8 +78,8 @@ impl App for ClockApp {
                 let time_pref = config::CONFIG
                     .lock()
                     .await
-                    .borrow()
-                    .as_ref()
+                    .borrow_mut()
+                    .as_mut()
                     .unwrap()
                     .get_time_preference();
                 let datetime = rtc::get_datetime().await;
@@ -135,8 +135,8 @@ async fn clock() {
     let time_pref = config::CONFIG
         .lock()
         .await
-        .borrow()
-        .as_ref()
+        .borrow_mut()
+        .as_mut()
         .unwrap()
         .get_time_preference();
     DISPLAY_MATRIX.show_time_icon(time_pref, last_hour);
@@ -144,8 +144,8 @@ async fn clock() {
     let should_hourly_ring = config::CONFIG
         .lock()
         .await
-        .borrow()
-        .as_ref()
+        .borrow_mut()
+        .as_mut()
         .unwrap()
         .get_hourly_ring();
     if should_hourly_ring {
@@ -155,8 +155,8 @@ async fn clock() {
     let should_scroll_temp = config::CONFIG
         .lock()
         .await
-        .borrow()
-        .as_ref()
+        .borrow_mut()
+        .as_mut()
         .unwrap()
         .get_auto_scroll_temp();
     if should_scroll_temp {
@@ -169,8 +169,8 @@ async fn clock() {
     let colon_pref = config::CONFIG
         .lock()
         .await
-        .borrow()
-        .as_ref()
+        .borrow_mut()
+        .as_mut()
         .unwrap()
         .get_time_colon_preference();
 
@@ -230,8 +230,8 @@ async fn clock() {
                             let time_pref = config::CONFIG
                                 .lock()
                                 .await
-                                .borrow()
-                                .as_ref()
+                                .borrow_mut()
+                                .as_mut()
                                 .unwrap()
                                 .get_time_preference();
                             DISPLAY_MATRIX.show_time_icon(time_pref, hour);
@@ -260,8 +260,8 @@ async fn clock() {
                     let pref = config::CONFIG
                         .lock()
                         .await
-                        .borrow()
-                        .as_ref()
+                        .borrow_mut()
+                        .as_mut()
                         .unwrap()
                         .get_time_preference();
                     if let TimePreference::Twelve = pref {
@@ -292,8 +292,8 @@ async fn show_time(mut hour: u32, minute: u32, colon: TimeColon, show_now: bool)
     let pref = config::CONFIG
         .lock()
         .await
-        .borrow()
-        .as_ref()
+        .borrow_mut()
+        .as_mut()
         .unwrap()
         .get_time_preference();
 
