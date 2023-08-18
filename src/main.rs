@@ -150,6 +150,8 @@ async fn main_core(
     button_three: Input<'static, PIN_15>,
     speaker: Output<'static, PIN_14>,
 ) {
+    Timer::after(Duration::from_millis(10)).await;
+
     config::init(flash).await;
     rtc::init(ds3231).await;
 
@@ -193,7 +195,7 @@ async fn display_core(
         .unwrap();
 
     // let config init.
-    Timer::after(Duration::from_secs(1)).await;
+    Timer::after(Duration::from_millis(200)).await;
 
     let autolight_enabled = config::CONFIG
         .lock()
