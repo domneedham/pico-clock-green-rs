@@ -8,8 +8,8 @@ pub async fn get_temperature_preference() -> TemperaturePreference {
     config::CONFIG
         .lock()
         .await
-        .borrow_mut()
-        .as_mut()
+        .borrow()
+        .as_ref()
         .unwrap()
         .get_temperature_preference()
 }

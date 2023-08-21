@@ -200,8 +200,8 @@ async fn display_core(
     let autolight_enabled = config::CONFIG
         .lock()
         .await
-        .borrow_mut()
-        .as_mut()
+        .borrow()
+        .as_ref()
         .unwrap()
         .get_autolight();
     DISPLAY_MATRIX.show_autolight_icon(autolight_enabled);

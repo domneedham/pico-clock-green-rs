@@ -148,8 +148,8 @@ pub mod backlight {
                 && config::CONFIG
                     .lock()
                     .await
-                    .borrow_mut()
-                    .as_mut()
+                    .borrow()
+                    .as_ref()
                     .unwrap()
                     .get_autolight()
             {

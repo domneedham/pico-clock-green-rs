@@ -631,8 +631,8 @@ mod configurations {
             self.state = config::CONFIG
                 .lock()
                 .await
-                .borrow_mut()
-                .as_mut()
+                .borrow()
+                .as_ref()
                 .unwrap()
                 .get_hourly_ring();
             self.starting_state = self.state;
@@ -702,8 +702,8 @@ mod configurations {
             self.state = config::CONFIG
                 .lock()
                 .await
-                .borrow_mut()
-                .as_mut()
+                .borrow()
+                .as_ref()
                 .unwrap()
                 .get_time_colon_preference();
             self.starting_state = self.state;
@@ -777,8 +777,8 @@ mod configurations {
             self.state = config::CONFIG
                 .lock()
                 .await
-                .borrow_mut()
-                .as_mut()
+                .borrow()
+                .as_ref()
                 .unwrap()
                 .get_auto_scroll_temp();
             self.starting_state = self.state;
