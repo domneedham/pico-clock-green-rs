@@ -108,7 +108,7 @@ pub mod backlight {
     };
     use embassy_time::{Duration, Instant, Timer};
 
-    use crate::config;
+    use crate::config::{self, ReadAndSaveConfig};
 
     /// List of sleep durations, where higher numbers are brighter outputs.
     const LIGHT_LEVELS: [u64; 5] = [10, 100, 300, 700, 1000];
@@ -145,7 +145,13 @@ pub mod backlight {
         loop {
             let now_time = Instant::now();
             if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1)
-                && config::CONFIG.lock().await.borrow().get_autolight()
+                && config::CONFIG
+                    .lock()
+                    .await
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .get_autolight()
             {
                 last_backlight_read = now_time;
                 let level_read = pins.adc.read(&mut pins.ain).await.unwrap();

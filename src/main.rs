@@ -43,17 +43,20 @@ mod stopwatch;
 
 use app::AppController;
 use clock::ClockApp;
+use config::{flash_config::FLASH_SIZE, ReadAndSaveConfig};
 use display::{backlight::BacklightPins, display_matrix::DISPLAY_MATRIX, DisplayPins};
 use ds323x::Ds323x;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
     adc::{Adc, Channel, Config as ADCConfig, InterruptHandler},
     bind_interrupts,
+    flash::{Async, Flash},
     gpio::{Input, Level, Output, Pull},
     i2c::{self, Config as I2CConfig},
     multicore::Stack,
     peripherals::*,
 };
+use embassy_time::{Duration, Timer};
 use pomodoro::PomodoroApp;
 use rtc::Ds3231;
 use settings::SettingsApp;
@@ -77,6 +80,9 @@ bind_interrupts!(struct Irqs {
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
+
+    // get flash config
+    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0);
 
     // init rtc
     let i2c = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6, I2CConfig::default());
@@ -122,6 +128,7 @@ fn main() -> ! {
         spawner
             .spawn(main_core(
                 spawner,
+                flash,
                 ds3231,
                 button_one,
                 button_two,
@@ -136,12 +143,16 @@ fn main() -> ! {
 #[embassy_executor::task]
 async fn main_core(
     spawner: Spawner,
+    flash: Flash<'static, embassy_rp::peripherals::FLASH, Async, FLASH_SIZE>,
     ds3231: Ds3231<'static>,
     button_one: Input<'static, PIN_2>,
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
     speaker: Output<'static, PIN_14>,
 ) {
+    Timer::after(Duration::from_millis(10)).await;
+
+    config::init(flash).await;
     rtc::init(ds3231).await;
 
     spawner
@@ -183,6 +194,15 @@ async fn display_core(
         .spawn(display::backlight::update_backlight(backlight_pins))
         .unwrap();
 
-    let autolight_enabled = config::CONFIG.lock().await.borrow().get_autolight();
+    // let config init.
+    Timer::after(Duration::from_millis(200)).await;
+
+    let autolight_enabled = config::CONFIG
+        .lock()
+        .await
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .get_autolight();
     DISPLAY_MATRIX.show_autolight_icon(autolight_enabled);
 }

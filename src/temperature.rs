@@ -1,5 +1,5 @@
 use crate::{
-    config::{self, TemperaturePreference},
+    config::{self, ReadAndSaveConfig, TemperaturePreference},
     rtc,
 };
 
@@ -9,6 +9,8 @@ pub async fn get_temperature_preference() -> TemperaturePreference {
         .lock()
         .await
         .borrow()
+        .as_ref()
+        .unwrap()
         .get_temperature_preference()
 }
 
