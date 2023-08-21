@@ -38,6 +38,7 @@ pub enum TimeColonPreference {
     Alt,
 }
 
+/// All the configuration options that can be edited at runtime.
 pub struct ConfigOptions {
     /// Whether the clock should beep on the hour.
     hourly_ring: bool,
@@ -60,11 +61,14 @@ pub struct ConfigOptions {
 
 /// Manage active configuration.
 pub struct Config {
+    /// The flash memory peripheral.
     flash: Flash<'static, embassy_rp::peripherals::FLASH, Async, { flash_config::FLASH_SIZE }>,
 
+    /// The config options.
     config_options: ConfigOptions,
 }
 
+/// Trait for how to read and save config options.
 pub trait ReadAndSaveConfig {
     /// Get the hourly ring state.
     fn get_hourly_ring(&self) -> bool;
@@ -120,7 +124,7 @@ impl Config {
         let temp_pref = flash_config::temp_pref_from_bytes(&bytes);
         let auto_scroll_temp = flash_config::auto_scroll_temp_from_bytes(&bytes);
         let time_pref = flash_config::time_pref_from_bytes(&bytes);
-        let autolight = flash_config::autolight_temp_from_bytes(&bytes);
+        let autolight = flash_config::autolight_from_bytes(&bytes);
 
         Self {
             flash,
@@ -223,6 +227,7 @@ impl ReadAndSaveConfig for Config {
 pub static CONFIG: Mutex<ThreadModeRawMutex, RefCell<Option<Config>>> =
     Mutex::new(RefCell::new(None));
 
+/// Init the config. Must have an initialised flash memory.
 pub async fn init(
     flash: Flash<'static, embassy_rp::peripherals::FLASH, Async, { flash_config::FLASH_SIZE }>,
 ) {
@@ -230,25 +235,41 @@ pub async fn init(
     CONFIG.lock().await.replace(Some(config));
 }
 
+/// Flash memory read/write for config.
 pub mod flash_config {
     use super::*;
 
+    /// The flash size.
     pub const FLASH_SIZE: usize = 2 * 1024 * 1024;
+
+    /// The initial offset of where to save the config in flash.
     pub const ADDR_OFFSET: u32 = 0x100000;
 
-    const FALSE_BYTES: u8 = 0x00;
-    const TRUE_BYTES: u8 = 0x01;
-
+    /// The offset and end offset for hourly ring.
     const HOURLY_RING: (usize, usize) = (10, 11);
+    /// The offset and end offset for time colon preference.
     const TIME_COLON_PREF: (usize, usize) = (HOURLY_RING.0 + 10, HOURLY_RING.0 + 11);
+    /// The offset and end offset for temperature preference.
     const TEMP_PREF: (usize, usize) = (TIME_COLON_PREF.0 + 10, TIME_COLON_PREF.0 + 11);
+    /// The offset and end offset for auto scrolling features.
     const AUTO_SCROLL_TEMP: (usize, usize) = (TEMP_PREF.0 + 10, TEMP_PREF.0 + 11);
+    /// The offset and end offset for time hour preference.
     const TIME_PREF: (usize, usize) = (AUTO_SCROLL_TEMP.0 + 10, AUTO_SCROLL_TEMP.0 + 11);
+    /// The offset and end offset for autolight.
     const AUTOLIGHT: (usize, usize) = (TIME_PREF.0 + 10, TIME_PREF.0 + 11);
 
+    /// Bytes to use to reperesent a false value.
+    const FALSE_BYTES: u8 = 0x00;
+
+    /// Bytes to use to represent a true value.
+    const TRUE_BYTES: u8 = 0x01;
+
+    /// Trait to overload embassy flash.
     pub trait FlashOveride {
+        /// Read all flash bytes from *ADDR_OFFSET*.
         fn read_all(&mut self) -> [u8; ERASE_SIZE];
 
+        /// Write all config into flash.
         fn write_all(&mut self, state: &ConfigOptions);
     }
 
@@ -270,21 +291,23 @@ pub mod flash_config {
             read_buf[TEMP_PREF.0] = temp_pref_to_bytes(state.temp_pref);
             read_buf[AUTO_SCROLL_TEMP.0] = auto_scroll_temp_to_bytes(state.auto_scroll_temp);
             read_buf[TIME_PREF.0] = time_pref_to_bytes(state.time_pref);
-            read_buf[AUTOLIGHT.0] = autolight_temp_to_bytes(state.autolight);
+            read_buf[AUTOLIGHT.0] = autolight_to_bytes(state.autolight);
 
             self.blocking_write(ADDR_OFFSET, &read_buf).unwrap();
         }
     }
 
+    /// Get the hourly ring config from the full flash byte array.
     pub fn hourly_ring_from_bytes(bytes: &[u8; ERASE_SIZE]) -> bool {
         let state_bytes = &bytes[HOURLY_RING.0..HOURLY_RING.1];
-        if state_bytes == &[TRUE_BYTES] {
+        if state_bytes == [TRUE_BYTES] {
             return true;
         }
 
-        return false;
+        false
     }
 
+    /// Convert the hourly ring state to bytes.
     pub fn hourly_ring_to_bytes(state: bool) -> u8 {
         if state {
             TRUE_BYTES
@@ -293,16 +316,18 @@ pub mod flash_config {
         }
     }
 
+    /// Get the time colon preference config from the full flash byte array.
     pub fn time_colon_from_bytes(bytes: &[u8; ERASE_SIZE]) -> TimeColonPreference {
         let state_bytes = &bytes[TIME_COLON_PREF.0..TIME_COLON_PREF.1];
         match state_bytes {
-            &[0x00] => TimeColonPreference::Alt,
-            &[0x01] => TimeColonPreference::Blink,
-            &[0x02] => TimeColonPreference::Solid,
+            [0x00] => TimeColonPreference::Alt,
+            [0x01] => TimeColonPreference::Blink,
+            [0x02] => TimeColonPreference::Solid,
             _ => TimeColonPreference::Blink,
         }
     }
 
+    /// Convert the time colon preference state to bytes.
     pub fn time_colon_to_bytes(state: TimeColonPreference) -> u8 {
         match state {
             TimeColonPreference::Alt => 0x00,
@@ -311,15 +336,17 @@ pub mod flash_config {
         }
     }
 
+    /// Get the temperature preference config from the full flash byte array.
     pub fn temp_pref_from_bytes(bytes: &[u8; ERASE_SIZE]) -> TemperaturePreference {
         let state_bytes = &bytes[TEMP_PREF.0..TEMP_PREF.1];
         match state_bytes {
-            &[0x00] => TemperaturePreference::Celcius,
-            &[0x01] => TemperaturePreference::Fahrenheit,
+            [0x00] => TemperaturePreference::Celcius,
+            [0x01] => TemperaturePreference::Fahrenheit,
             _ => TemperaturePreference::Celcius,
         }
     }
 
+    /// Convert the temperature preference state to bytes.
     pub fn temp_pref_to_bytes(state: TemperaturePreference) -> u8 {
         match state {
             TemperaturePreference::Celcius => 0x00,
@@ -327,15 +354,17 @@ pub mod flash_config {
         }
     }
 
+    /// Get the auto scroll feature config from the full flash byte array.
     pub fn auto_scroll_temp_from_bytes(bytes: &[u8; ERASE_SIZE]) -> bool {
         let state_bytes = &bytes[AUTO_SCROLL_TEMP.0..AUTO_SCROLL_TEMP.1];
-        if state_bytes == &[TRUE_BYTES] {
+        if state_bytes == [TRUE_BYTES] {
             return true;
         }
 
-        return false;
+        false
     }
 
+    /// Convert the auto scroll feature state to bytes.
     pub fn auto_scroll_temp_to_bytes(state: bool) -> u8 {
         if state {
             TRUE_BYTES
@@ -344,15 +373,17 @@ pub mod flash_config {
         }
     }
 
+    /// Get the time preference config from the full flash byte array.
     pub fn time_pref_from_bytes(bytes: &[u8; ERASE_SIZE]) -> TimePreference {
         let state_bytes = &bytes[TIME_PREF.0..TIME_PREF.1];
         match state_bytes {
-            &[0x00] => TimePreference::Twelve,
-            &[0x01] => TimePreference::TwentyFour,
+            [0x00] => TimePreference::Twelve,
+            [0x01] => TimePreference::TwentyFour,
             _ => TimePreference::TwentyFour,
         }
     }
 
+    /// Convert the time preference state to bytes.
     pub fn time_pref_to_bytes(state: TimePreference) -> u8 {
         match state {
             TimePreference::Twelve => 0x00,
@@ -360,16 +391,18 @@ pub mod flash_config {
         }
     }
 
-    pub fn autolight_temp_from_bytes(bytes: &[u8; ERASE_SIZE]) -> bool {
+    /// Get the autolight config from the full flash byte array.
+    pub fn autolight_from_bytes(bytes: &[u8; ERASE_SIZE]) -> bool {
         let state_bytes = &bytes[AUTOLIGHT.0..AUTOLIGHT.1];
-        if state_bytes == &[TRUE_BYTES] {
+        if state_bytes == [TRUE_BYTES] {
             return true;
         }
 
-        return false;
+        false
     }
 
-    pub fn autolight_temp_to_bytes(state: bool) -> u8 {
+    /// Convert the autolight state to bytes.
+    pub fn autolight_to_bytes(state: bool) -> u8 {
         if state {
             TRUE_BYTES
         } else {
