@@ -23,9 +23,6 @@ pub struct DisplayPins<'a> {
     /// A2 pin.
     a2: Output<'a, embassy_rp::peripherals::PIN_22>,
 
-    /// OE pin.
-    oe: Output<'a, embassy_rp::peripherals::PIN_13>,
-
     /// SDI pin.
     sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
 
@@ -42,7 +39,6 @@ impl<'a> DisplayPins<'a> {
         a0: Output<'a, embassy_rp::peripherals::PIN_16>,
         a1: Output<'a, embassy_rp::peripherals::PIN_18>,
         a2: Output<'a, embassy_rp::peripherals::PIN_22>,
-        oe: Output<'a, embassy_rp::peripherals::PIN_13>,
         sdi: Output<'a, embassy_rp::peripherals::PIN_11>,
         clk: Output<'a, embassy_rp::peripherals::PIN_10>,
         le: Output<'a, embassy_rp::peripherals::PIN_12>,
@@ -51,7 +47,6 @@ impl<'a> DisplayPins<'a> {
             a0,
             a1,
             a2,
-            oe,
             sdi,
             clk,
             le,
@@ -59,62 +54,120 @@ impl<'a> DisplayPins<'a> {
     }
 }
 
-/// Display. Sole purpose is turn on/off leds as required for showing all things in the display.
-pub struct Display<'a> {
-    /// All the pins required for the display.
-    pins: DisplayPins<'a>,
+/// Update the display with accordance to the last known state of the matrix.
+#[embassy_executor::task]
+pub async fn update_matrix(mut pins: DisplayPins<'static>) {
+    let mut row: usize = 0;
 
-    /// The current row being looped through.
-    row: usize,
+    loop {
+        row = (row + 1) % 8;
+
+        critical_section::with(|cs| {
+            for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[row] {
+                pins.clk.set_low();
+                pins.sdi.set_low();
+
+                if col == 1 {
+                    pins.sdi.set_high();
+                }
+
+                pins.clk.set_high();
+            }
+        });
+
+        pins.le.set_high();
+        pins.le.set_low();
+
+        if row & 0x01 != 0 {
+            pins.a0.set_high();
+        } else {
+            pins.a0.set_low();
+        }
+
+        if row & 0x02 != 0 {
+            pins.a1.set_high();
+        } else {
+            pins.a1.set_low();
+        }
+
+        if row & 0x04 != 0 {
+            pins.a2.set_high();
+        } else {
+            pins.a2.set_low();
+        }
+
+        Timer::after(Duration::from_millis(1)).await;
+    }
 }
 
-impl<'a> Display<'a> {
-    /// Create a new display struct.
-    pub fn new(pins: DisplayPins<'a>) -> Display {
-        Self { pins, row: 0 }
+/// Backlight module. Will adjust backlight automatically.
+pub mod backlight {
+    use embassy_rp::{
+        adc::{Adc, Async, Channel},
+        gpio::Output,
+    };
+    use embassy_time::{Duration, Instant, Timer};
+
+    use crate::config::{self, ReadAndSaveConfig};
+
+    /// List of sleep durations, where higher numbers are brighter outputs.
+    const LIGHT_LEVELS: [u64; 5] = [10, 100, 300, 700, 1000];
+
+    /// All the pins required for backlight implementation.
+    pub struct BacklightPins<'a> {
+        /// OE pin.
+        pub oe: Output<'static, embassy_rp::peripherals::PIN_13>,
+
+        /// ADC controller.
+        pub adc: Adc<'a, Async>,
+
+        /// AIN pin.
+        pub ain: Channel<'a>,
     }
 
-    /// The main display loop. Will not terminate.
-    pub async fn run_forever(&mut self) -> ! {
+    impl<'a> BacklightPins<'a> {
+        /// Create a new backlight pins struct.
+        pub fn new(
+            oe: Output<'static, embassy_rp::peripherals::PIN_13>,
+            adc: Adc<'a, Async>,
+            ain: Channel<'a>,
+        ) -> Self {
+            Self { oe, adc, ain }
+        }
+    }
+
+    /// Set brightness level every X seconds.
+    #[embassy_executor::task]
+    pub async fn update_backlight(mut pins: BacklightPins<'static>) {
+        let mut last_backlight_read = Instant::now();
+        let mut sleep_duration = LIGHT_LEVELS[3];
+
         loop {
-            self.row = (self.row + 1) % 8;
-
-            critical_section::with(|cs| {
-                for col in display_matrix::DISPLAY_MATRIX.0.borrow_ref(cs)[self.row] {
-                    self.pins.clk.set_low();
-                    if col == 1 {
-                        self.pins.sdi.set_high();
-                    } else {
-                        self.pins.sdi.set_low();
-                    }
-                    self.pins.clk.set_high();
-                }
-            });
-
-            self.pins.le.set_high();
-            self.pins.le.set_low();
-
-            if self.row & 0x01 != 0 {
-                self.pins.a0.set_high();
-            } else {
-                self.pins.a0.set_low();
+            let now_time = Instant::now();
+            if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1)
+                && config::CONFIG
+                    .lock()
+                    .await
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .get_autolight()
+            {
+                last_backlight_read = now_time;
+                let level_read = pins.adc.read(&mut pins.ain).await.unwrap();
+                sleep_duration = match level_read {
+                    0..=3749 => LIGHT_LEVELS[4],
+                    3750..=3799 => LIGHT_LEVELS[3],
+                    3800..=3849 => LIGHT_LEVELS[2],
+                    3850..=3899 => LIGHT_LEVELS[1],
+                    _ => LIGHT_LEVELS[0],
+                };
             }
 
-            if self.row & 0x02 != 0 {
-                self.pins.a1.set_high();
-            } else {
-                self.pins.a1.set_low();
-            }
-
-            if self.row & 0x04 != 0 {
-                self.pins.a2.set_high();
-            } else {
-                self.pins.a2.set_low();
-            }
-
-            self.pins.oe.set_low();
-            Timer::after(Duration::from_micros(100)).await;
-            self.pins.oe.set_high();
+            pins.oe.set_low();
+            Timer::after(Duration::from_micros(sleep_duration)).await;
+            pins.oe.set_high();
+            Timer::after(Duration::from_micros(25)).await;
         }
     }
 }
@@ -144,6 +197,21 @@ pub mod display_matrix {
 
             select(DISPLAY_MATRIX.show_text(item), CANCEL_SIGNAL.wait()).await;
         }
+    }
+
+    /// The type of colon to use when showing the time.
+    pub enum TimeColon {
+        /// Display a full colon.
+        Full,
+
+        /// Display nothing.
+        Empty,
+
+        /// Display top half of a colon.
+        Top,
+
+        /// Display bottom half of a colon.
+        Bottom,
     }
 
     /// Item to be added to the text buffer.
@@ -188,6 +256,9 @@ pub mod display_matrix {
 
         /// The last column that can be rendered.
         pub const LAST_INDEX: usize = 24;
+
+        /// The delay between shifting the display items left.
+        pub const SCROLL_DELAY: u64 = 150;
 
         /// Clear the entire display. Includes icons.
         ///
@@ -392,6 +463,7 @@ pub mod display_matrix {
         ///
         /// * `left` - What to show on the left side of the `:`.
         /// * `right` - What to show on the right side of the `:`.
+        /// * `colon` - What colon to show.
         /// * `hold_end_ms` - Minimum period to show the text for.
         /// * `show_now` - Set true if you want to cancel the current display wait and remove all items in the text buffer queue.
         /// * `scroll_off_display` - Set true if you want the text to scroll off the display.
@@ -399,13 +471,14 @@ pub mod display_matrix {
         /// # Example
         ///
         /// ```rust
-        /// DISPLAY_MATRIX.queue_time(10, 30, 1000, false, false).await; // will render as 10:30 for at least 1 second.
-        /// DISPLAY_MATRIX.queue_time(5, 5, 1000, false, true).await; // will render as 05:05 for at least 1 second, then scroll all text off the display.
+        /// DISPLAY_MATRIX.queue_time(10, 30, TimeColon::Full, 1000, false, false).await; // will render as 10:30 for at least 1 second.
+        /// DISPLAY_MATRIX.queue_time(5, 5, TimeColon::Full, 1000, false, true).await; // will render as 05:05 for at least 1 second, then scroll all text off the display.
         /// ```
         pub async fn queue_time(
             &self,
             left: u32,
             right: u32,
+            colon: TimeColon,
             hold_end_ms: u64,
             show_now: bool,
             scroll_off_display: bool,
@@ -418,7 +491,12 @@ pub mod display_matrix {
                 _ = write!(time, "{left}");
             }
 
-            _ = write!(time, ":");
+            match colon {
+                TimeColon::Full => _ = write!(time, ":"),
+                TimeColon::Empty => _ = write!(time, " "),
+                TimeColon::Top => _ = write!(time, "±"),
+                TimeColon::Bottom => _ = write!(time, "§"),
+            }
 
             if right < 10 {
                 _ = write!(time, "0{right}");
@@ -735,14 +813,18 @@ pub mod display_matrix {
         ///
         /// Responsible for moving items on the display left (animation) if the position of the last item is at the end of the display.
         async fn show_text(&self, item: TextBufferItem<'_>) {
-            critical_section::with(|cs| {
-                self.clear(cs, false);
-            });
-
             let mut total_width = 0;
 
             for c in &item.text {
                 total_width += c.width;
+                total_width += 1;
+            }
+
+            // if width is greater than matrix size with whitespace accounted for
+            if total_width < Self::LAST_INDEX - 2 {
+                critical_section::with(|cs| {
+                    self.clear(cs, false);
+                });
             }
 
             let mut pos = item.start_position;
@@ -760,17 +842,25 @@ pub mod display_matrix {
                 pos += 2;
 
                 // if the position is greater than the last possible index and the total width is also greater (this won't be true for perfect fit items)
-                if pos >= Self::LAST_INDEX && total_width > Self::LAST_INDEX {
+                if pos > Self::LAST_INDEX && total_width >= Self::LAST_INDEX {
                     self.shift_text_left(true);
                 }
             }
 
-            Timer::after(Duration::from_millis(item.hold_end_ms)).await;
+            // set end hold to same time as scroll interval if scrolling off display
+            // and hold is less than 0 (it looks jumpy otherwise)
+            let hold_end_ms = if item.hold_end_ms < Self::SCROLL_DELAY && item.scroll_off_display {
+                Self::SCROLL_DELAY
+            } else {
+                item.hold_end_ms
+            };
+
+            Timer::after(Duration::from_millis(hold_end_ms)).await;
 
             if item.scroll_off_display {
                 while pos > Self::DISPLAY_OFFSET {
                     self.shift_text_left(false);
-                    Timer::after(Duration::from_millis(300)).await;
+                    Timer::after(Duration::from_millis(Self::SCROLL_DELAY)).await;
                     pos -= 1;
                 }
             }
@@ -793,7 +883,7 @@ pub mod display_matrix {
                 if pos > Self::LAST_INDEX {
                     // if first time hitting end of display, pause for better readability
                     if !hit_end_of_display {
-                        Timer::after(Duration::from_millis(300)).await;
+                        Timer::after(Duration::from_millis(Self::SCROLL_DELAY)).await;
                         hit_end_of_display = true;
                     }
 
@@ -801,7 +891,7 @@ pub mod display_matrix {
 
                     self.shift_text_left(false);
 
-                    Timer::after(Duration::from_millis(300)).await;
+                    Timer::after(Duration::from_millis(Self::SCROLL_DELAY)).await;
 
                     // grab matrix again after update
                     matrix = critical_section::with(|cs| *self.0.borrow_ref(cs));
@@ -915,17 +1005,26 @@ pub mod display_matrix {
             match pref {
                 TimePreference::Twelve => {
                     if hour >= 12 {
-                        DISPLAY_MATRIX.hide_icon("AM");
-                        DISPLAY_MATRIX.show_icon("PM");
+                        self.hide_icon("AM");
+                        self.show_icon("PM");
                     } else {
-                        DISPLAY_MATRIX.hide_icon("PM");
-                        DISPLAY_MATRIX.show_icon("AM");
+                        self.hide_icon("PM");
+                        self.show_icon("AM");
                     }
                 }
                 TimePreference::TwentyFour => {
-                    DISPLAY_MATRIX.hide_icon("AM");
-                    DISPLAY_MATRIX.hide_icon("PM");
+                    self.hide_icon("AM");
+                    self.hide_icon("PM");
                 }
+            }
+        }
+
+        /// Show or hide the autolight icon.
+        pub fn show_autolight_icon(&self, state: bool) {
+            if state {
+                self.show_icon("AutoLight");
+            } else {
+                self.hide_icon("AutoLight");
             }
         }
 
@@ -959,6 +1058,10 @@ pub mod display_matrix {
                     Err(_) => break,
                 }
             }
+
+            critical_section::with(|cs| {
+                DISPLAY_MATRIX.clear(cs, false);
+            });
         }
     }
 }
@@ -983,7 +1086,7 @@ mod text {
     }
 
     /// All supported characters lookup table.
-    const CHARACTER_TABLE: [(char, Character); 43] = [
+    const CHARACTER_TABLE: [(char, Character); 46] = [
         (
             '0',
             Character::new(&4, &[0x06, 0x09, 0x09, 0x09, 0x09, 0x09, 0x06]),
@@ -1122,7 +1225,7 @@ mod text {
         ),
         (
             'Y',
-            Character::new(&4, &[0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04]),
+            Character::new(&5, &[0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04]),
         ),
         (
             'Z',
@@ -1131,6 +1234,16 @@ mod text {
         (
             ':',
             Character::new(&2, &[0x00, 0x03, 0x03, 0x00, 0x03, 0x03, 0x00]),
+        ),
+        // top half of a : only
+        (
+            '±',
+            Character::new(&2, &[0x00, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00]),
+        ),
+        // bottom half of a : only
+        (
+            '§',
+            Character::new(&2, &[0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00]),
         ),
         (
             ' ',
@@ -1151,6 +1264,10 @@ mod text {
         (
             '/',
             Character::new(&2, &[0x02, 0x02, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01]),
+        ),
+        (
+            '+',
+            Character::new(&5, &[0x00, 0x04, 0x04, 0x1F, 0x04, 0x04, 0x00]),
         ),
         // empty space
         (

@@ -8,6 +8,7 @@ use crate::{
     alarm::AlarmApp,
     buttons::{ButtonPress, BUTTON_ONE_PRESS, BUTTON_THREE_PRESS, BUTTON_TWO_PRESS},
     clock::ClockApp,
+    config::{self},
     display::display_matrix::DISPLAY_MATRIX,
     pomodoro::PomodoroApp,
     settings::SettingsApp,
@@ -165,7 +166,16 @@ impl AppController {
                 }
             }
             ButtonPress::Long => self.show_app_picker().await,
-            ButtonPress::Double => {}
+            ButtonPress::Double => {
+                let state = config::CONFIG
+                    .lock()
+                    .await
+                    .borrow_mut()
+                    .as_mut()
+                    .unwrap()
+                    .toggle_autolight();
+                DISPLAY_MATRIX.show_autolight_icon(state);
+            }
         };
     }
 

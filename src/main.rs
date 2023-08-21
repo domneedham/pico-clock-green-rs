@@ -44,19 +44,23 @@ mod speaker;
 /// Use stopwatch module.
 mod stopwatch;
 
-use crate::display::{Display, DisplayPins};
-
 use alarm::AlarmApp;
 use app::AppController;
 use clock::ClockApp;
+use config::{flash_config::FLASH_SIZE, ReadAndSaveConfig};
+use display::{backlight::BacklightPins, display_matrix::DISPLAY_MATRIX, DisplayPins};
 use ds323x::Ds323x;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
 use embassy_rp::{
+    adc::{Adc, Channel, Config as ADCConfig, InterruptHandler},
+    bind_interrupts,
+    flash::{Async, Flash},
     gpio::{Input, Level, Output, Pull},
-    i2c::{self, Config},
+    i2c::{self, Config as I2CConfig},
     multicore::Stack,
     peripherals::*,
 };
+use embassy_time::{Duration, Timer};
 use pomodoro::PomodoroApp;
 use rtc::Ds3231;
 use settings::SettingsApp;
@@ -72,13 +76,20 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 /// Preallocate stack memory for the second pico core.
 static mut CORE1_STACK: Stack<4096> = Stack::new();
 
+bind_interrupts!(struct Irqs {
+    ADC_IRQ_FIFO => InterruptHandler;
+});
+
 /// Entry point.
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
 
+    // get flash config
+    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0);
+
     // init rtc
-    let i2c = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6, Config::default());
+    let i2c = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6, I2CConfig::default());
     let ds323x: Ds323x<
         ds323x::interface::I2cInterface<i2c::I2c<'_, I2C1, i2c::Blocking>>,
         ds323x::ic::DS3231,
@@ -101,12 +112,19 @@ fn main() -> ! {
     let sdi: Output<'_, PIN_11> = Output::new(p.PIN_11, Level::Low);
     let clk: Output<'_, PIN_10> = Output::new(p.PIN_10, Level::Low);
     let le: Output<'_, PIN_12> = Output::new(p.PIN_12, Level::Low);
-    let display_pins: DisplayPins<'_> = DisplayPins::new(a0, a1, a2, oe, sdi, clk, le);
-    let display: Display<'_> = Display::new(display_pins);
+    let adc = Adc::new(p.ADC, Irqs, ADCConfig::default());
+    let ain = Channel::new_pin(p.PIN_26, Pull::None);
+    let display_pins: DisplayPins<'_> = DisplayPins::new(a0, a1, a2, sdi, clk, le);
+    let backlight_pins: BacklightPins<'_> = BacklightPins::new(oe, adc, ain);
+    // let display: Display<'_> = Display::new(display_pins);
 
     embassy_rp::multicore::spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
         let executor1 = EXECUTOR1.init(Executor::new());
-        executor1.run(|spawner| spawner.spawn(display_core(display)).unwrap());
+        executor1.run(|spawner| {
+            spawner
+                .spawn(display_core(spawner, display_pins, backlight_pins))
+                .unwrap()
+        });
     });
 
     let executor0 = EXECUTOR0.init(Executor::new());
@@ -114,6 +132,7 @@ fn main() -> ! {
         spawner
             .spawn(main_core(
                 spawner,
+                flash,
                 ds3231,
                 button_one,
                 button_two,
@@ -128,12 +147,16 @@ fn main() -> ! {
 #[embassy_executor::task]
 async fn main_core(
     spawner: Spawner,
+    flash: Flash<'static, embassy_rp::peripherals::FLASH, Async, FLASH_SIZE>,
     ds3231: Ds3231<'static>,
     button_one: Input<'static, PIN_2>,
     button_two: Input<'static, PIN_17>,
     button_three: Input<'static, PIN_15>,
     speaker: Output<'static, PIN_14>,
 ) {
+    Timer::after(Duration::from_millis(10)).await;
+
+    config::init(flash).await;
     rtc::init(ds3231).await;
 
     spawner
@@ -167,6 +190,25 @@ async fn main_core(
 
 /// Task to run on the second core.
 #[embassy_executor::task]
-async fn display_core(mut display: Display<'static>) {
-    display.run_forever().await;
+async fn display_core(
+    spawner: Spawner,
+    display_pins: DisplayPins<'static>,
+    backlight_pins: BacklightPins<'static>,
+) {
+    spawner.spawn(display::update_matrix(display_pins)).unwrap();
+    spawner
+        .spawn(display::backlight::update_backlight(backlight_pins))
+        .unwrap();
+
+    // let config init.
+    Timer::after(Duration::from_millis(200)).await;
+
+    let autolight_enabled = config::CONFIG
+        .lock()
+        .await
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .get_autolight();
+    DISPLAY_MATRIX.show_autolight_icon(autolight_enabled);
 }
