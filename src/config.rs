@@ -68,45 +68,6 @@ pub struct Config {
     config_options: ConfigOptions,
 }
 
-/// Trait for how to read and save config options.
-pub trait ReadAndSaveConfig {
-    /// Get the hourly ring state.
-    fn get_hourly_ring(&self) -> bool;
-
-    /// Set the hourly ring state.
-    fn set_hourly_ring(&mut self, new_state: bool);
-
-    /// Get the time colon preference.
-    fn get_time_colon_preference(&self) -> TimeColonPreference;
-
-    /// Set the users time colon preference.
-    fn set_time_colon_preference(&mut self, new_state: TimeColonPreference);
-
-    /// Get the users temperature preference.
-    fn get_temperature_preference(&self) -> TemperaturePreference;
-
-    /// Set the users temperature preference.
-    fn set_temperature_preference(&mut self, new_state: TemperaturePreference);
-
-    /// Get the auto scroll temperature state.
-    fn get_auto_scroll_temp(&self) -> bool;
-
-    /// Set the auto scroll temperature state.
-    fn set_auto_scroll_temp(&mut self, new_state: bool);
-
-    /// Get the users temperature preference.
-    fn get_time_preference(&self) -> TimePreference;
-
-    /// Set the users time preference.
-    fn set_time_preference(&mut self, new_state: TimePreference);
-
-    /// Get the autolight state.
-    fn get_autolight(&self) -> bool;
-
-    /// Set the autolight state.
-    fn set_autolight(&mut self, new_state: bool);
-}
-
 impl Config {
     /// Init the config.
     pub async fn new(
@@ -138,85 +99,40 @@ impl Config {
             },
         }
     }
-
-    /// Toggle the users temperature preference.
-    pub fn toggle_temperature_preference(&mut self) {
-        match self.get_temperature_preference() {
-            TemperaturePreference::Celcius => {
-                self.set_temperature_preference(TemperaturePreference::Fahrenheit)
-            }
-            TemperaturePreference::Fahrenheit => {
-                self.set_temperature_preference(TemperaturePreference::Celcius)
-            }
-        }
-    }
-
-    /// Toggle the users time preference.
-    pub fn toggle_time_preference(&mut self) {
-        match self.get_time_preference() {
-            TimePreference::Twelve => self.set_time_preference(TimePreference::TwentyFour),
-            TimePreference::TwentyFour => self.set_time_preference(TimePreference::Twelve),
-        }
-    }
-
-    /// Toggle the autolight value. Return the new value.
-    pub fn toggle_autolight(&mut self) -> bool {
-        let state = !self.config_options.autolight;
-        self.set_autolight(state);
-        state
-    }
 }
 
-impl ReadAndSaveConfig for Config {
-    fn get_hourly_ring(&self) -> bool {
-        self.config_options.hourly_ring
-    }
-
+impl Config {
+    /// Set the hourly ring state.
     fn set_hourly_ring(&mut self, new_state: bool) {
         self.config_options.hourly_ring = new_state;
         self.flash.write_all(&self.config_options);
     }
 
-    fn get_time_colon_preference(&self) -> TimeColonPreference {
-        self.config_options.time_colon_pref
-    }
-
+    /// Set the users time colon preference.
     fn set_time_colon_preference(&mut self, new_state: TimeColonPreference) {
         self.config_options.time_colon_pref = new_state;
         self.flash.write_all(&self.config_options);
     }
 
-    fn get_temperature_preference(&self) -> TemperaturePreference {
-        self.config_options.temp_pref
-    }
-
+    /// Set the users temperature preference.
     fn set_temperature_preference(&mut self, new_state: TemperaturePreference) {
         self.config_options.temp_pref = new_state;
         self.flash.write_all(&self.config_options);
     }
 
-    fn get_auto_scroll_temp(&self) -> bool {
-        self.config_options.auto_scroll_temp
-    }
-
+    /// Set the auto scroll temperature state.
     fn set_auto_scroll_temp(&mut self, new_state: bool) {
         self.config_options.auto_scroll_temp = new_state;
         self.flash.write_all(&self.config_options);
     }
 
-    fn get_time_preference(&self) -> TimePreference {
-        self.config_options.time_pref
-    }
-
+    /// Set the users time preference.
     fn set_time_preference(&mut self, new_state: TimePreference) {
         self.config_options.time_pref = new_state;
         self.flash.write_all(&self.config_options);
     }
 
-    fn get_autolight(&self) -> bool {
-        self.config_options.autolight
-    }
-
+    /// Set the autolight state.
     fn set_autolight(&mut self, new_state: bool) {
         self.config_options.autolight = new_state;
         self.flash.write_all(&self.config_options);
@@ -224,8 +140,155 @@ impl ReadAndSaveConfig for Config {
 }
 
 /// Static reference to the config so it can be accessed by all otehr apps.
-pub static CONFIG: Mutex<ThreadModeRawMutex, RefCell<Option<Config>>> =
-    Mutex::new(RefCell::new(None));
+static CONFIG: Mutex<ThreadModeRawMutex, RefCell<Option<Config>>> = Mutex::new(RefCell::new(None));
+
+/// Get hourly ring state.
+pub async fn get_hourly_ring() -> bool {
+    let guard = CONFIG.lock().await;
+    let state = guard.borrow().as_ref().unwrap().config_options.hourly_ring;
+    drop(guard);
+    state
+}
+
+/// Set the hourly ring state.
+pub async fn set_hourly_ring(new_state: bool) {
+    let guard = CONFIG.lock().await;
+
+    guard
+        .borrow_mut()
+        .as_mut()
+        .unwrap()
+        .set_hourly_ring(new_state);
+
+    drop(guard);
+}
+
+/// Get the time colon preference.
+pub async fn get_time_colon_preference() -> TimeColonPreference {
+    let guard = CONFIG.lock().await;
+    let state = guard
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .config_options
+        .time_colon_pref;
+    drop(guard);
+    state
+}
+
+/// Set the time colon preference.
+pub async fn set_time_colon_preference(new_state: TimeColonPreference) {
+    let guard = CONFIG.lock().await;
+
+    guard
+        .borrow_mut()
+        .as_mut()
+        .unwrap()
+        .set_time_colon_preference(new_state);
+
+    drop(guard);
+}
+
+/// Get the temperature preference.
+pub async fn get_temperature_preference() -> TemperaturePreference {
+    let guard = CONFIG.lock().await;
+    let state = guard.borrow().as_ref().unwrap().config_options.temp_pref;
+    drop(guard);
+    state
+}
+
+/// Toggle the temperature preference.
+pub async fn toggle_temperature_preference() {
+    let guard = CONFIG.lock().await;
+    let state = guard.borrow().as_ref().unwrap().config_options.temp_pref;
+    match state {
+        TemperaturePreference::Celcius => guard
+            .borrow_mut()
+            .as_mut()
+            .unwrap()
+            .set_temperature_preference(TemperaturePreference::Fahrenheit),
+        TemperaturePreference::Fahrenheit => guard
+            .borrow_mut()
+            .as_mut()
+            .unwrap()
+            .set_temperature_preference(TemperaturePreference::Celcius),
+    }
+    drop(guard);
+}
+
+/// Get the auto scroll preference.
+pub async fn get_auto_scroll_temp() -> bool {
+    let guard = CONFIG.lock().await;
+    let state = guard
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .config_options
+        .auto_scroll_temp;
+    drop(guard);
+    state
+}
+
+/// Set the auto scroll preference.
+pub async fn set_auto_scroll_temp(new_state: bool) {
+    let guard = CONFIG.lock().await;
+
+    guard
+        .borrow_mut()
+        .as_mut()
+        .unwrap()
+        .set_auto_scroll_temp(new_state);
+
+    drop(guard);
+}
+
+/// Get the time preference.
+pub async fn get_time_preference() -> TimePreference {
+    let guard = CONFIG.lock().await;
+    let state = guard.borrow().as_ref().unwrap().config_options.time_pref;
+    drop(guard);
+    state
+}
+
+/// Toggle the time preference.
+pub async fn toggle_time_preference() {
+    let guard = CONFIG.lock().await;
+    let state = guard.borrow().as_ref().unwrap().config_options.time_pref;
+
+    match state {
+        TimePreference::Twelve => guard
+            .borrow_mut()
+            .as_mut()
+            .unwrap()
+            .set_time_preference(TimePreference::TwentyFour),
+        TimePreference::TwentyFour => guard
+            .borrow_mut()
+            .as_mut()
+            .unwrap()
+            .set_time_preference(TimePreference::Twelve),
+    }
+
+    drop(guard);
+}
+
+/// Get the autolight preference.
+pub async fn get_autolight() -> bool {
+    let guard = CONFIG.lock().await;
+    let state = guard.borrow().as_ref().unwrap().config_options.autolight;
+    drop(guard);
+    state
+}
+
+/// Toggle the autolight preference.
+pub async fn toggle_autolight() -> bool {
+    let guard = CONFIG.lock().await;
+
+    let state = guard.borrow().as_ref().unwrap().config_options.autolight;
+    guard.borrow_mut().as_mut().unwrap().set_autolight(!state);
+
+    drop(guard);
+    !state
+}
 
 /// Init the config. Must have an initialised flash memory.
 pub async fn init(

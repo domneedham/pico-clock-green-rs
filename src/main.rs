@@ -43,7 +43,7 @@ mod stopwatch;
 
 use app::AppController;
 use clock::ClockApp;
-use config::{flash_config::FLASH_SIZE, ReadAndSaveConfig};
+use config::flash_config::FLASH_SIZE;
 use display::{backlight::BacklightPins, display_matrix::DISPLAY_MATRIX, DisplayPins};
 use ds323x::Ds323x;
 use embassy_executor::{Executor, Spawner, _export::StaticCell};
@@ -197,12 +197,6 @@ async fn display_core(
     // let config init.
     Timer::after(Duration::from_millis(200)).await;
 
-    let autolight_enabled = config::CONFIG
-        .lock()
-        .await
-        .borrow()
-        .as_ref()
-        .unwrap()
-        .get_autolight();
+    let autolight_enabled = config::get_autolight().await;
     DISPLAY_MATRIX.show_autolight_icon(autolight_enabled);
 }
