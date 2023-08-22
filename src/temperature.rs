@@ -1,17 +1,11 @@
 use crate::{
-    config::{self, ReadAndSaveConfig, TemperaturePreference},
+    config::{self, TemperaturePreference},
     rtc,
 };
 
 /// Get the temperature preference.
 pub async fn get_temperature_preference() -> TemperaturePreference {
-    config::CONFIG
-        .lock()
-        .await
-        .borrow()
-        .as_ref()
-        .unwrap()
-        .get_temperature_preference()
+    config::get_temperature_preference().await
 }
 
 /// Get the temperature based on the current user preference.

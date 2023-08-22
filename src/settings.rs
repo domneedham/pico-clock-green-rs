@@ -306,7 +306,7 @@ mod configurations {
 
     use crate::{
         buttons::ButtonPress,
-        config::{self, ReadAndSaveConfig, TimeColonPreference},
+        config::{self, TimeColonPreference},
         display::display_matrix::DISPLAY_MATRIX,
         rtc,
     };
@@ -628,26 +628,14 @@ mod configurations {
     impl Configuration for HourlyRingConfiguration {
         async fn start(&mut self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
-            self.state = config::CONFIG
-                .lock()
-                .await
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .get_hourly_ring();
+            self.state = config::get_hourly_ring().await;
             self.starting_state = self.state;
             self.show().await;
         }
 
         async fn save(&mut self) {
             if self.state != self.starting_state {
-                config::CONFIG
-                    .lock()
-                    .await
-                    .borrow_mut()
-                    .as_mut()
-                    .unwrap()
-                    .set_hourly_ring(self.state);
+                config::set_hourly_ring(self.state).await;
             }
         }
 
@@ -699,26 +687,14 @@ mod configurations {
     impl Configuration for TimeColonConfiguration {
         async fn start(&mut self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
-            self.state = config::CONFIG
-                .lock()
-                .await
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .get_time_colon_preference();
+            self.state = config::get_time_colon_preference().await;
             self.starting_state = self.state;
             self.show().await;
         }
 
         async fn save(&mut self) {
             if self.state != self.starting_state {
-                config::CONFIG
-                    .lock()
-                    .await
-                    .borrow_mut()
-                    .as_mut()
-                    .unwrap()
-                    .set_time_colon_preference(self.state);
+                config::set_time_colon_preference(self.state).await;
             }
         }
 
@@ -774,26 +750,14 @@ mod configurations {
     impl Configuration for AutoScrollTempConfiguration {
         async fn start(&mut self) {
             SETTINGS_DISPLAY_QUEUE.signal(super::BlinkTask::None);
-            self.state = config::CONFIG
-                .lock()
-                .await
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .get_auto_scroll_temp();
+            self.state = config::get_auto_scroll_temp().await;
             self.starting_state = self.state;
             self.show().await;
         }
 
         async fn save(&mut self) {
             if self.state != self.starting_state {
-                config::CONFIG
-                    .lock()
-                    .await
-                    .borrow_mut()
-                    .as_mut()
-                    .unwrap()
-                    .set_auto_scroll_temp(self.state);
+                config::set_auto_scroll_temp(self.state).await;
             }
         }
 
