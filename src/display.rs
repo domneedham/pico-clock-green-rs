@@ -108,7 +108,7 @@ pub mod backlight {
     };
     use embassy_time::{Duration, Instant, Timer};
 
-    use crate::config::{self, ReadAndSaveConfig};
+    use crate::config::{self};
 
     /// List of sleep durations, where higher numbers are brighter outputs.
     const LIGHT_LEVELS: [u64; 5] = [10, 100, 300, 700, 1000];
@@ -144,24 +144,21 @@ pub mod backlight {
 
         loop {
             let now_time = Instant::now();
-            if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1)
-                && config::CONFIG
-                    .lock()
-                    .await
-                    .borrow()
-                    .as_ref()
-                    .unwrap()
-                    .get_autolight()
-            {
+            if now_time.duration_since(last_backlight_read) >= Duration::from_secs(1) {
+                // update last scan for backlight to now
                 last_backlight_read = now_time;
-                let level_read = pins.adc.read(&mut pins.ain).await.unwrap();
-                sleep_duration = match level_read {
-                    0..=3749 => LIGHT_LEVELS[4],
-                    3750..=3799 => LIGHT_LEVELS[3],
-                    3800..=3849 => LIGHT_LEVELS[2],
-                    3850..=3899 => LIGHT_LEVELS[1],
-                    _ => LIGHT_LEVELS[0],
-                };
+
+                // only update light level if autolight is enabled
+                if config::get_autolight().await {
+                    let level_read = pins.adc.read(&mut pins.ain).await.unwrap();
+                    sleep_duration = match level_read {
+                        0..=3749 => LIGHT_LEVELS[4],
+                        3750..=3799 => LIGHT_LEVELS[3],
+                        3800..=3849 => LIGHT_LEVELS[2],
+                        3850..=3899 => LIGHT_LEVELS[1],
+                        _ => LIGHT_LEVELS[0],
+                    };
+                }
             }
 
             pins.oe.set_low();
