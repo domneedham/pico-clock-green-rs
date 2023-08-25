@@ -38,6 +38,20 @@ pub enum TimeColonPreference {
     Alt,
 }
 
+pub struct Alarm {
+    pub hour: u32,
+
+    pub minute: u32,
+
+    pub monday: bool,
+    pub tuesday: bool,
+    pub wednesday: bool,
+    pub thursday: bool,
+    pub friday: bool,
+    pub saturday: bool,
+    pub sunday: bool,
+}
+
 /// All the configuration options that can be edited at runtime.
 pub struct ConfigOptions {
     /// Whether the clock should beep on the hour.
